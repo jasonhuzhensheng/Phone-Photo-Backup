@@ -9,7 +9,7 @@ This repository contains the initial project documentation and empty `src/` and 
 ## Completed
 
 - Added an English project README and ignore rules for personal media, backups, credentials, local databases, and generated files.
-- Prepared the source scaffold for publication under the English name `Phone-Photo-Backup`; public GitHub repository creation is in progress.
+- Published the source scaffold to the public GitHub repository `jasonhuzhensheng/Phone-Photo-Backup`.
 - No personal photos, video files, backup archives, or secrets are included.
 
 ## Open questions
