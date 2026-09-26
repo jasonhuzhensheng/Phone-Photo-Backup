@@ -1,0 +1,28 @@
+# Personal photo and video data — never commit to this source repository.
+photos/
+Photos/
+DCIM/
+backups/
+exports/
+*.jpg
+*.jpeg
+*.heic
+*.heif
+*.png
+*.mov
+*.mp4
+
+# Secrets, local databases and machine-specific files.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.sqlite3
+*.db
+.DS_Store
+
+# Local tooling output.
+.venv/
+__pycache__/
+*.py[cod]
