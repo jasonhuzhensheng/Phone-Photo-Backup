@@ -92,8 +92,7 @@ private struct FolderRow: View {
     let disabled: Bool
     let choose: () -> Void
     let drop: (URL) -> Void
-    @Environment(BackupModel.self) private var model
-    private var targeted: Bool { model.dropTarget == systemImage }
+    @State private var targeted = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -130,9 +129,7 @@ private struct FolderRow: View {
             guard !disabled, let folder = urls.first(where: \.hasDirectoryPath) ?? urls.first.flatMap(Self.folderURL) else { return false }
             drop(folder)
             return true
-        } isTargeted: { isTargeted in
-            if isTargeted { model.dropTarget = systemImage } else if targeted { model.dropTarget = nil }
-        }
+        } isTargeted: { targeted = $0 }
     }
 
     private static func folderURL(_ url: URL) -> URL? {
@@ -200,7 +197,6 @@ private struct StatusPanel: View {
 }
 
 private struct PlanSummary: View {
-    @Environment(BackupModel.self) private var model
     let plan: BackupPlan
 
     var body: some View {
@@ -226,6 +222,7 @@ private struct PlanSummary: View {
 
 private struct ReportSummary: View {
     @Environment(BackupModel.self) private var model
+    @State private var showErrors = false
     let report: BackupReport
 
     var body: some View {
@@ -244,7 +241,7 @@ private struct ReportSummary: View {
                 Button("Show in Finder") { model.revealBackupFolder() }
             }
             if !report.errors.isEmpty {
-                DisclosureGroup("Show errors", isExpanded: Bindable(model).showErrors) {
+                DisclosureGroup("Show errors", isExpanded: $showErrors) {
                     ScrollView {
                         Text(verbatim: report.errors.joined(separator: "\n"))
                             .font(.caption.monospaced())

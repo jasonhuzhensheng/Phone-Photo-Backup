@@ -4,13 +4,13 @@ import SwiftUI
 @main
 struct PhonePhotoBackupApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    // A single shared model (SwiftUI's @State macro needs full Xcode to compile).
-    private let model = BackupModel.shared
+    @State private var model = BackupModel()
 
     var body: some Scene {
         Window("Phone Photo Backup", id: "main") {
             ContentView()
                 .environment(model)
+                .task { SelfCheck.runIfRequested(model: model) }
         }
         .windowResizability(.contentMinSize)
         .commands {
@@ -46,7 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Needed when launched via `swift run` (no .app bundle).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
-        SelfCheck.runIfRequested(model: .shared)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }

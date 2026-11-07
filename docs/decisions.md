@@ -39,5 +39,5 @@
 - 状态：已采纳，替代 D003 中“Tkinter / Python 标准库”的技术选择（备份规则不变）
 - 背景：用户要求把软件改成 macOS 原生应用。
 - 决策：用 Swift 6 + SwiftUI 重写，Swift Package Manager 构建，脚本打包为 ad-hoc 签名的 `.app`；最低 macOS 14。引擎拆为独立的 `BackupCore` 模块。删除 Python 实现（保留在 git 历史中）。
-- 原因：原生界面、菜单、快捷键、拖放、访达集成、深色模式和中文本地化；不依赖用户安装 Python/Tk。SPM 只需 Command Line Tools，当前 Mac 无需安装 Xcode。
-- 影响：清单格式（schema 1）保持不变，已验证 Python 版与 Swift 版可以互相继续对方的备份。新增：可停止/继续、备份期间防止休眠、保留创建日期与扩展属性、在不支持硬链接的 exFAT 盘上回退为排他重命名。应用未经 Apple 公证，分发给他人时首次需右键“打开”。
+- 原因：原生界面、菜单、快捷键、拖放、访达集成、深色模式和中文本地化；不依赖用户安装 Python/Tk。SPM 构建简单，不需要生成 Xcode 工程文件（Xcode 可直接打开 `Package.swift`）。
+- 影响：清单格式（schema 1）保持不变，已验证 Python 版与 Swift 版可以互相继续对方的备份。新增：可停止/继续、备份期间防止休眠、保留创建日期与扩展属性、在不支持硬链接的 exFAT 盘上回退为排他重命名。应用未经 Apple 公证，分发给他人时首次需右键“打开”。2026-11-07 补充：最初在只有 Command Line Tools 的 Mac 上编写，`@State` 无法编译，界面状态曾全部放进 `BackupModel`；在装有 Xcode 27.2 的机器上确认 `@State` 可用后已改回标准 SwiftUI 写法，因此构建需要完整 Xcode。

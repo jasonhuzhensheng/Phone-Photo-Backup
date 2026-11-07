@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-项目名称：Phone Photo Backup（手机照片备份）。目标是将手机导出后的照片文件夹备份到用户指定的本地位置；当前不直接连接手机，也不上传云端。现有实现为 macOS 原生应用：Swift 6 + SwiftUI，最低 macOS 14，使用 Swift Package Manager 构建（只需 Command Line Tools，无需完整 Xcode）。
+项目名称：Phone Photo Backup（手机照片备份）。目标是将手机导出后的照片文件夹备份到用户指定的本地位置；当前不直接连接手机，也不上传云端。现有实现为 macOS 原生应用：Swift 6 + SwiftUI，最低 macOS 14，使用 Swift Package Manager 构建，需要完整 Xcode（已在 Xcode 27.2 验证；只装 Command Line Tools 的 Mac 上 SwiftUI 的 `@State` 曾无法编译）。
 
 ## 文档入口
 
@@ -48,6 +48,6 @@ scripts/build-app.sh            # 打包 build/Phone Photo Backup.app
 swift run PhonePhotoBackup      # 开发时无 bundle 启动（英文界面）
 ```
 
-注意：当前 Mac 只有 Command Line Tools，SwiftUI 的 `@State` 宏插件不可用，界面状态统一放在 `BackupModel` 中，不要使用 `@State`。新增界面文字时同步更新 `Resources/zh-Hans.lproj/Localizable.strings`。
+界面状态写法：跨视图共享的状态放在 `BackupModel`（`@Observable`），视图私有的状态（拖放高亮、展开/折叠等）用标准 `@State`；应用入口用 `@State` 持有模型并通过 `.environment` 下发。新增界面文字时同步更新 `Resources/zh-Hans.lproj/Localizable.strings`。
 
 `PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份、把窗口截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用。测试必须使用临时模拟文件，不读取真实照片。

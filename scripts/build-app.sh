@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds "build/Phone Photo Backup.app" with only the Xcode Command Line Tools.
+# Builds "build/Phone Photo Backup.app" with Swift Package Manager (needs Xcode).
 # Usage: scripts/build-app.sh [--install]   (--install copies the app to /Applications)
 set -euo pipefail
 

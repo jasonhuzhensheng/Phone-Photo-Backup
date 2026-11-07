@@ -5,8 +5,6 @@ import Observation
 
 @MainActor @Observable
 final class BackupModel {
-    static let shared = BackupModel()
-
     enum Phase: Equatable {
         case idle, scanning, ready, backingUp, finished
     }
@@ -21,9 +19,6 @@ final class BackupModel {
     private(set) var report: BackupReport?
     var alertMessage: String?
     var confirmingStart = false
-    /// UI-only state, kept here instead of in view-local @State.
-    var dropTarget: String?
-    var showErrors = false
 
     private var task: Task<Void, Never>?
     private static let sourceKey = "sourcePath", destinationKey = "destinationPath"
@@ -113,7 +108,6 @@ final class BackupModel {
         processedBytes = 0
         currentFile = ""
         report = nil
-        showErrors = false
 
         task = Task {
             // Keep the Mac awake while copying.
