@@ -26,3 +26,8 @@ exports/
 .venv/
 __pycache__/
 *.py[cod]
+
+# Swift / app build output.
+.build/
+build/
+*.xcodeproj/xcuserdata/

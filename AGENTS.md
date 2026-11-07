@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-项目名称：Phone Photo Backup（手机照片备份）。目标是将手机导出后的照片文件夹备份到用户指定的本地位置；当前不直接连接手机，也不上传云端。现有实现采用 Python 3.11 标准库与 Tkinter。
+项目名称：Phone Photo Backup（手机照片备份）。目标是将手机导出后的照片文件夹备份到用户指定的本地位置；当前不直接连接手机，也不上传云端。现有实现为 macOS 原生应用：Swift 6 + SwiftUI，最低 macOS 14，使用 Swift Package Manager 构建（只需 Command Line Tools，无需完整 Xcode）。
 
 ## 文档入口
 
@@ -12,10 +12,12 @@
 
 ## 目录约定
 
-- `src/`：备份引擎与 Tkinter 桌面界面。
-- `tests/`：测试代码与必要的测试夹具。
+- `Sources/BackupCore/`：备份引擎（不依赖界面）。
+- `Sources/PhonePhotoBackup/`：SwiftUI 应用界面。
+- `Tests/BackupCoreTests/`：引擎测试（Swift Testing）。
+- `Resources/`：Info.plist 与本地化字符串（en、zh-Hans）。
+- `scripts/`：打包 `.app` 与生成图标的脚本。
 - `docs/`：架构和重要决策等长期技术文档。
-- `.gitkeep`：空目录占位文件；目录加入实际内容后可删除。
 
 ## 长期工作规则
 
@@ -38,11 +40,14 @@ git diff
 git diff --check
 ```
 
-当前不需要额外依赖。项目根目录执行：
+当前不需要第三方依赖。项目根目录执行：
 
 ```sh
-python3 src/desktop_app.py
-python3 -m unittest discover -s tests -v
+swift test                      # 运行测试
+scripts/build-app.sh            # 打包 build/Phone Photo Backup.app
+swift run PhonePhotoBackup      # 开发时无 bundle 启动（英文界面）
 ```
 
-Python 3.11 与 Tkinter 已在当前 Mac 验证。测试必须使用临时模拟文件，不读取真实照片。
+注意：当前 Mac 只有 Command Line Tools，SwiftUI 的 `@State` 宏插件不可用，界面状态统一放在 `BackupModel` 中，不要使用 `@State`。新增界面文字时同步更新 `Resources/zh-Hans.lproj/Localizable.strings`。
+
+`PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份、把窗口截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用。测试必须使用临时模拟文件，不读取真实照片。
