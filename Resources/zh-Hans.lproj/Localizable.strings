@@ -1,0 +1,59 @@
+/* Backup engine */
+"The source folder does not exist or cannot be opened." = "源文件夹不存在或无法打开。";
+"Choose a source folder containing the exported phone files." = "请选择包含手机导出文件的源文件夹。";
+"Choose a backup location that does not overlap the source folder." = "请选择与源文件夹互不包含的备份位置。";
+"Cannot read the source folder: %@" = "无法读取源文件夹：%@";
+"The source file changed during backup; run the backup again." = "备份过程中源文件发生了变化，请重新运行备份。";
+"The copied file did not pass SHA-256 verification." = "复制的文件未通过 SHA-256 校验。";
+"The existing backup manifest is unreadable; no files were changed." = "现有备份清单无法读取，未修改任何文件。";
+"The existing manifest does not match this backup; no files were changed." = "现有清单与本次备份不匹配，未修改任何文件。";
+"Files were copied, but the manifest could not be saved: %@" = "文件已复制，但无法保存清单：%@";
+
+/* Folder pickers */
+"Choose the folder exported from your phone." = "选择从手机导出的文件夹。";
+"Choose where the backup folder should be created." = "选择要在哪里创建备份文件夹。";
+"Choose" = "选择";
+
+/* Main window */
+"Phone Photo Backup" = "手机照片备份";
+"Copies every file and verifies it with SHA-256. Originals are never changed or deleted; re-running skips unchanged files." = "逐个复制所有文件并用 SHA-256 校验。绝不修改或删除原文件；再次运行会跳过未变化的文件。";
+"Source folder" = "源文件夹";
+"Folder exported from your phone" = "从手机导出的文件夹";
+"Backup location" = "备份位置";
+"A separate folder or external drive" = "另一个文件夹或外置硬盘";
+"Choose…" = "选择…";
+"Change…" = "更改…";
+"Everything stays on this Mac. No cloud upload." = "所有数据都留在这台 Mac 上，不上传云端。";
+"Scan Source" = "扫描源文件夹";
+"Start Backup" = "开始备份";
+"Stop" = "停止";
+"Cancel" = "取消";
+"OK" = "好";
+"Backup error" = "备份出错";
+"Start backup?" = "开始备份？";
+"%@ files, %@, will be copied into:\n%@\n\nOriginal files will not be changed or deleted." = "将把 %1$@ 个文件（%2$@）复制到：\n%3$@\n\n原文件不会被修改或删除。";
+
+/* Status */
+"Export photos from your phone to a folder on this Mac first." = "先把手机里的照片导出到这台 Mac 上的某个文件夹。";
+"Choose that folder and a separate backup location — or drag folders onto the rows above." = "选择该文件夹和另一个备份位置——也可以把文件夹直接拖到上方对应的行。";
+"Scan to review the file count and size, then start the backup." = "扫描后确认文件数量和大小，再开始备份。";
+"Scanning source files…" = "正在扫描源文件…";
+"%@ of %@ files" = "已处理 %1$@ / %2$@ 个文件";
+"Files" = "文件数";
+"Size" = "大小";
+"Backup folder" = "备份文件夹";
+"Backup complete" = "备份完成";
+"Backup finished with errors" = "备份完成，但有错误";
+"Backup stopped. Run it again to continue." = "备份已停止。再次运行即可继续。";
+"Copied" = "已复制";
+"Unchanged" = "未变化";
+"Errors" = "错误";
+"Data copied" = "复制数据量";
+"Show in Finder" = "在访达中显示";
+"Show errors" = "显示错误";
+
+/* Menus */
+"Choose Source Folder…" = "选择源文件夹…";
+"Choose Backup Location…" = "选择备份位置…";
+"Backup" = "备份";
+"Show Backup Folder in Finder" = "在访达中显示备份文件夹";

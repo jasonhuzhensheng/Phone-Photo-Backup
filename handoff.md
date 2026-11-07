@@ -1,27 +1,30 @@
 # 项目交接
 
-最后更新：2026-09-26
+最后更新：2026-11-07
 
 ## 当前状态
 
-Phone Photo Backup 首版桌面应用已实现并发布到公开仓库 `jasonhuzhensheng/Phone-Photo-Backup`。用户选择将手机导出后的照片文件夹复制到本地备份位置；当前不直连手机、不使用云端。
+Phone Photo Backup 已从 Python/Tkinter 改写为 macOS 原生应用（Swift 6 + SwiftUI，macOS 14+），支持英文与简体中文界面。备份规则与清单格式不变；当前不直连手机、不使用云端。
 
 ## 已完成与验证
 
-- Tkinter 桌面界面：选择源目录和目标位置、扫描文件数/字节数、显示备份进度与结果。
-- 备份引擎：递归复制普通文件、分块处理、SHA-256 校验、保留文件时间、跳过未变文件；内容变化时保留旧文件并另存冲突版本。
-- 来源清单使用相对路径，不保存原始绝对路径；不跟随符号链接，不修改或删除来源文件。
-- 5 项单元测试通过，测试只使用临时模拟字节；`py_compile` 与 `git diff --check` 通过。Python 3.11/Tkinter 在当前 Mac 可用。
-- 仓库公开地址：https://github.com/jasonhuzhensheng/Phone-Photo-Backup 。忽略规则排除照片、视频、备份、密钥、数据库和本地缓存。
+- `BackupCore` 引擎：递归复制普通文件、分块 + fsync、SHA-256 校验、保留权限/时间戳/创建日期/扩展属性、跳过未变文件、变化文件另存冲突副本、可取消、exFAT 回退。
+- SwiftUI 界面：文件夹选择与拖放、记住上次文件夹、扫描预览、确认对话框、按字节的进度条、停止、结果统计、错误列表、在访达中显示；菜单与快捷键（⌘O、⇧⌘O、⌘R、⌘B、⌘.）；备份期间防止休眠。
+- 界面状态为标准 SwiftUI 写法：应用入口用 `@State` 持有 `BackupModel`，拖放高亮与错误列表展开用视图私有 `@State`；自检由主窗口的 `.task` 触发。在 Xcode 27.2（macOS 27.2）上编译通过。
+- `swift test`：9 项测试通过（只用临时模拟字节）。
+- `scripts/build-app.sh` 生成 ad-hoc 签名的 `build/Phone Photo Backup.app`（约 1.5 MB），`codesign --verify --strict` 通过。
+- 用 `PPB_SNAPSHOT_DIR` 自检在临时模拟文件（41 个、43.6 MB）上跑通扫描 → 备份 → 完成，中英文界面截图检查正常；再次运行全部跳过，修改文件后生成冲突副本。改回 `@State` 后在 Xcode 机器上复测：18 个模拟文件、26.8 MB，首次全部复制，再次运行 18 个未变化、0 错误，英文与简体中文截图正常。
+- 兼容性：旧 Python 版在 Swift 版生成的备份上运行，结果为 41 个未变化、0 错误。
 
 ## 限制与待办
 
-- 尚未在真实手机导出目录或外置硬盘上做用户验收。
-- 不支持 USB 设备直连、iCloud/Photos API、恢复、加密、断点续传或云同步。
-- 后续可根据用户需要增加设备导入或恢复功能；任何验证仍只用临时/模拟文件，禁止把私人照片提交到 GitHub。
+- 构建需要完整 Xcode；只装 Command Line Tools 的 Mac（如 Mac mini）无法编译界面层。
+- 尚未在真实手机导出目录或真实外置硬盘（尤其 exFAT）上做用户验收；exFAT 回退路径没有自动化测试。
+- 未经 Apple 公证；分发给他人需 Developer ID 签名与公证，否则首次需右键“打开”。
+- 不支持 USB 设备直连（可考虑 ImageCaptureCore）、照片图库、恢复、加密或云同步。
 
 ## 启动与测试
 
-从项目根目录运行：`python3 src/desktop_app.py`
+从项目根目录运行：`scripts/build-app.sh && open "build/Phone Photo Backup.app"`
 
-运行测试：`python3 -m unittest discover -s tests -v`
+运行测试：`swift test`

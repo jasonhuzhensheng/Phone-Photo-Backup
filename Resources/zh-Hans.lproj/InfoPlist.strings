@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "手机照片备份";
+"CFBundleName" = "手机照片备份";
+"NSHumanReadableCopyright" = "本地优先的照片备份，不上传云端。";
