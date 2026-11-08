@@ -39,6 +39,28 @@ struct Manifest: Codable {
         try container.encode(files, forKey: .files)
     }
 
+    static func timestamp() -> String {
+        Date.now.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+    }
+
+    /// Adds a version for `relativePath`, or refreshes it when the same bytes were seen before.
+    mutating func record(_ relativePath: String, sha256: String, size: Int64, backupPath: String) {
+        let now = Self.timestamp()
+        var versions = files[relativePath] ?? []
+        if let index = versions.firstIndex(where: { $0.sha256 == sha256 }) {
+            versions[index].lastSeen = now
+            versions[index].backupPath = backupPath
+        } else {
+            versions.append(.init(sha256: sha256, sizeBytes: size, backupPath: backupPath, firstSeen: now, lastSeen: now))
+        }
+        files[relativePath] = versions
+    }
+
+    /// Marks the newest version of `relativePath` as seen again without re-reading it.
+    mutating func touch(_ relativePath: String, version index: Int) {
+        files[relativePath]?[index].lastSeen = Self.timestamp()
+    }
+
     static func load(from path: String, sourceName: String) throws -> Manifest {
         guard FileManager.default.fileExists(atPath: path) else {
             return Manifest(schemaVersion: BackupEngine.schemaVersion, sourceName: sourceName, updatedAt: nil, files: [:])

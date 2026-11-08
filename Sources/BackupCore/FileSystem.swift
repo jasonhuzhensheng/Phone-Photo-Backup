@@ -61,6 +61,14 @@ enum FS {
         return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 
+    /// Forces a file's contents to permanent storage.
+    static func flush(_ path: String) throws {
+        let fd = open(path, O_RDONLY | O_CLOEXEC)
+        guard fd >= 0 else { throw posixError(path) }
+        defer { close(fd) }
+        guard fsync(fd) == 0 else { throw posixError(path) }
+    }
+
     /// Moves `temporary` to `target` without ever overwriting an existing file.
     /// Tries an exclusive rename, then a hard link (APFS/HFS+), then a checked rename for
     /// file systems such as exFAT that support neither.

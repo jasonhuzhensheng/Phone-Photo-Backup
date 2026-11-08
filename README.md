@@ -1,18 +1,28 @@
 # Phone Photo Backup
 
-A native macOS app (Swift + SwiftUI) for backing up a folder exported from a phone. Local-first: nothing is uploaded anywhere. The interface is available in English and Simplified Chinese (手机照片备份).
+A native macOS app (Swift + SwiftUI) for backing up the photos and videos on a phone, read directly over USB or from a folder exported from it. Local-first: nothing is uploaded anywhere. The interface is available in English and Simplified Chinese (手机照片备份).
 
 ## Current scope
 
-- Choose an exported source folder and a separate backup location (button, ⌘O / ⇧⌘O, or drag a folder onto the row).
+- Back up straight from a phone connected by USB: iPhone and iPad, or Android in "Transfer photos (PTP)" mode. The phone is selected automatically when it is plugged in. Originals (HEIC/HEVC) are copied, not JPEG/H.264 conversions, and the folder layout on the phone is kept.
+- Or choose an exported source folder. Pick a separate backup location (button, ⌘O / ⇧⌘O, or drag a folder onto the row).
 - Scan all regular files recursively and show file count and total size before copying.
 - Copy files byte-for-byte, verify each copy with SHA-256, and preserve permissions, modification/access times (nanosecond precision), creation date and extended attributes (Finder tags, comments).
 - Re-running the backup skips unchanged files. If a file changed, the existing copy is preserved and the new version is saved as a conflict copy (`photo.conflict-1a2b3c4d.jpg`).
 - Write a local JSON manifest (`.phone-photo-backup.json`) with relative paths, hashes, sizes and version timestamps. The format is unchanged from the earlier Python version, so existing backups continue to work.
 - A backup can be stopped at any time and resumed by running it again. The Mac is kept awake while copying.
+- If the phone locks or is unplugged during a backup, the backup pauses and continues by itself once the phone is connected and unlocked again. Files already in the backup are not read from the phone again.
 - Works on APFS, HFS+ and exFAT drives. Never modifies or deletes source files. Symlinks are skipped.
 
-This version does not connect directly to iPhone or Android devices, restore files, sync to cloud storage, or encrypt the destination. Export the phone files first (for example with Image Capture or Finder), then select that folder. All regular files inside the chosen folder are copied.
+This version does not read the Photos library on the Mac, restore files, sync to cloud storage, or encrypt the destination. Photos kept only in iCloud ("Optimize iPhone Storage") are not on the phone and cannot be copied over USB. Android phones in "File transfer (MTP)" mode are not visible to macOS; switch them to "Transfer photos (PTP)". When a folder is the source, all regular files inside it are copied.
+
+### Backing up from a phone
+
+1. Connect the phone with a USB cable and unlock it. On iPhone, tap **Trust** when asked.
+2. Open the app. The phone appears as the source and its file list is read.
+3. Choose a backup location, **Scan Source**, then **Start Backup**. Keep the phone unlocked until it finishes; if it locks, the backup pauses until you unlock it.
+
+Backups from a phone go into `<phone name>_backup` in the backup location.
 
 ## Requirements
 

@@ -8,6 +8,27 @@
 "The existing backup manifest is unreadable; no files were changed." = "现有备份清单无法读取，未修改任何文件。";
 "The existing manifest does not match this backup; no files were changed." = "现有清单与本次备份不匹配，未修改任何文件。";
 "Files were copied, but the manifest could not be saved: %@" = "文件已复制，但无法保存清单：%@";
+"The file read from the device is incomplete; run the backup again." = "从手机读取的文件不完整，请重新运行备份。";
+
+/* Connected phone */
+"The phone was disconnected. Reconnect it and try again." = "手机已断开连接。请重新连接后再试。";
+"The phone is not ready yet. Unlock it and try again." = "手机尚未就绪。请解锁后再试。";
+"Phone" = "手机";
+"Source" = "来源";
+"No phone connected" = "未连接手机";
+"Folder…" = "文件夹…";
+"Phone not connected" = "手机未连接";
+"Connect your phone with a USB cable, or choose an exported folder" = "用 USB 线连接手机，或选择已导出的文件夹";
+"· Connecting…" = "· 正在连接…";
+"· Unlock the phone and tap “Trust”" = "· 请解锁手机并点按“信任”";
+"· Reading file list… %@ items" = "· 正在读取文件列表… %@ 项";
+"· %@ items" = "· %@ 项";
+"Reading the file list from %@…" = "正在读取“%@”的文件列表…";
+"The file is no longer on the phone." = "手机上已没有这个文件。";
+"Keep the phone unlocked and connected until the backup finishes." = "备份完成前请保持手机解锁并连接。";
+"Paused: the phone is locked. Unlock it to continue." = "已暂停：手机已锁定，解锁后自动继续。";
+"Paused: reconnecting to the phone…" = "已暂停：正在重新连接手机…";
+"Paused: the phone was disconnected. Reconnect and unlock it to continue." = "已暂停：手机已断开。重新连接并解锁后自动继续。";
 
 /* Folder pickers */
 "Choose the folder exported from your phone." = "选择从手机导出的文件夹。";
@@ -17,14 +38,12 @@
 /* Main window */
 "Phone Photo Backup" = "手机照片备份";
 "Copies every file and verifies it with SHA-256. Originals are never changed or deleted; re-running skips unchanged files." = "逐个复制所有文件并用 SHA-256 校验。绝不修改或删除原文件；再次运行会跳过未变化的文件。";
-"Source folder" = "源文件夹";
-"Folder exported from your phone" = "从手机导出的文件夹";
 "Backup location" = "备份位置";
 "A separate folder or external drive" = "另一个文件夹或外置硬盘";
 "Choose…" = "选择…";
 "Change…" = "更改…";
 "Everything stays on this Mac. No cloud upload." = "所有数据都留在这台 Mac 上，不上传云端。";
-"Scan Source" = "扫描源文件夹";
+"Scan Source" = "扫描来源";
 "Start Backup" = "开始备份";
 "Stop" = "停止";
 "Cancel" = "取消";
@@ -34,8 +53,8 @@
 "%@ files, %@, will be copied into:\n%@\n\nOriginal files will not be changed or deleted." = "将把 %1$@ 个文件（%2$@）复制到：\n%3$@\n\n原文件不会被修改或删除。";
 
 /* Status */
-"Export photos from your phone to a folder on this Mac first." = "先把手机里的照片导出到这台 Mac 上的某个文件夹。";
-"Choose that folder and a separate backup location — or drag folders onto the rows above." = "选择该文件夹和另一个备份位置——也可以把文件夹直接拖到上方对应的行。";
+"Connect your phone with a USB cable and unlock it. On iPhone tap “Trust”; on Android choose “Transfer photos (PTP)”." = "用 USB 线连接手机并解锁。iPhone 上点按“信任”；安卓手机选择“传输照片（PTP）”模式。";
+"Choose the phone (or a folder exported from it) and a separate backup location." = "选择手机（或从手机导出的文件夹）以及另一个备份位置。";
 "Scan to review the file count and size, then start the backup." = "扫描后确认文件数量和大小，再开始备份。";
 "Scanning source files…" = "正在扫描源文件…";
 "%@ of %@ files" = "已处理 %1$@ / %2$@ 个文件";
