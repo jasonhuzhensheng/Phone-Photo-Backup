@@ -231,7 +231,7 @@ public enum BackupEngine {
 
     // MARK: Helpers
 
-    static func sha256(of path: String) throws -> String {
+    public static func sha256(of path: String) throws -> String {
         let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
         defer { try? handle.close() }
         var hasher = SHA256()

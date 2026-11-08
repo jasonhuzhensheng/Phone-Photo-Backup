@@ -117,9 +117,15 @@ struct ContentView: View {
                     .keyboardShortcut(.cancelAction)
             default:
                 OpenBackupVideosButton()
-                Button("Import into Photos") { model.importAllBackups() }
-                    .disabled(!model.canImport)
-                    .help("Add all backups in the backup location to Photos, skipping duplicates")
+                Menu("Import into Photos") {
+                    Button("Import This Phone Directly (No Backup)…") { model.importPhoneDirectly() }
+                        .disabled(!model.canImportPhone)
+                    Button("Import All Backups…") { model.importAllBackups() }
+                        .disabled(!model.canImport)
+                }
+                .fixedSize()
+                .disabled(!model.canImport && !model.canImportPhone)
+                .help("Add photos and videos to Photos, skipping ones already there: straight from the connected phone, or from all backups in the backup location")
                 Button("Scan Source") { model.scan() }
                     .disabled(!model.canScan)
                     .keyboardShortcut(model.canStart ? nil : .defaultAction)

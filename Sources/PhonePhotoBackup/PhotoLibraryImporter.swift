@@ -23,20 +23,26 @@ enum PhotoLibraryImporter {
         guard status == .authorized else { throw ImportError.notAuthorized }
     }
 
-    /// File names and capture dates of everything already in the library.
-    static func libraryIndex() -> LibraryIndex {
+    /// Everything already in the library, indexed by capture time. Original file names are read
+    /// later, only for items whose time matches something being imported: reading every name up
+    /// front takes many minutes in a large library.
+    static func libraryLookup() -> TimeIndexedLibrary {
         let options = PHFetchOptions()
         options.includeHiddenAssets = true
         let assets = PHAsset.fetchAssets(with: options)
-        var index = LibraryIndex()
+        var dates: [Date?] = []
+        var ids: [String] = []
+        dates.reserveCapacity(assets.count)
+        ids.reserveCapacity(assets.count)
         assets.enumerateObjects { asset, _, _ in
-            let resources = PHAssetResource.assetResources(for: asset)
-            let primary = resources.first { $0.type == .photo || $0.type == .video } ?? resources.first
-            if let name = primary?.originalFilename {
-                index.add(filename: name, date: asset.creationDate, id: asset.localIdentifier)
-            }
+            dates.append(asset.creationDate)
+            ids.append(asset.localIdentifier)
         }
-        return index
+        return TimeIndexedLibrary(dates: dates, ids: ids) { position in
+            let resources = PHAssetResource.assetResources(for: assets.object(at: position))
+            let primary = resources.first { $0.type == .photo || $0.type == .video } ?? resources.first
+            return primary?.originalFilename
+        }
     }
 
     /// For each item, the identifier of the one library item with the same file name stem and a

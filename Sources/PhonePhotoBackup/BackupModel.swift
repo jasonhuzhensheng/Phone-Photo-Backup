@@ -447,6 +447,142 @@ final class BackupModel {
         task = Task { await performImport(folders: folders, destination: destination, confirm: true) }
     }
 
+    /// True when the source is a phone and nothing else is running.
+    var canImportPhone: Bool {
+        guard !isBusy, !isSelfCheck, case .device = source else { return false }
+        return true
+    }
+
+    /// Imports the phone's photos and videos straight into Photos, without saving a backup.
+    func importPhoneDirectly() {
+        guard canImportPhone, case .device(let id) = source else { return }
+        report = nil
+        deletionReport = nil
+        task = Task { await performDirectImport(deviceID: id) }
+    }
+
+    /// Where the import record is kept: the backup location when one is chosen (shared with
+    /// imports from backups), otherwise the app's own folder in Application Support.
+    private func importRecordFolder() throws -> URL {
+        if let destinationURL { return destinationURL }
+        let folder = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                                 appropriateFor: nil, create: true)
+            .appendingPathComponent("Phone Photo Backup", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    /// Phone → Photos without a backup. For each photo, video or Live Photo, oldest first:
+    /// 1. skipped without reading it when an earlier direct import handled it (import record);
+    /// 2. skipped without reading it when Photos already has the same name and capture time
+    ///    (time from the phone's file list);
+    /// 3. otherwise read from the phone into a temporary folder, checked again with the capture
+    ///    time from the file itself and against the import record by SHA-256 (the same bytes
+    ///    from a backup import or in another folder), then added to Photos;
+    /// 4. the temporary copy is removed. Nothing is written to the backup location except the
+    ///    import record.
+    private func performDirectImport(deviceID id: String) async {
+        phase = .importing
+        importStage = .preparing
+        importDone = 0
+        importTotal = 0
+        currentFile = ""
+        importReport = nil
+        var result = ImportReport()
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PhonePhotoBackup-import-\(getpid())-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+        do {
+            try await PhotoLibraryImporter.authorize()
+            let recordFolder = try importRecordFolder()
+            var ledger = try ImportLedger.load(from: recordFolder)
+            try await devices.waitUntilReady(id)
+            _ = try devices.catalog(of: id)
+            let all = PhotosImport.phoneItems(devices.items(of: id))
+            let todo = all.filter { !ledger.handled($0, deviceID: id) }
+            result.previouslyImported = all.count - todo.count
+
+            if !todo.isEmpty {
+                guard await askToImport(count: todo.count, bytes: todo.reduce(0) { $0 + $1.size }) else {
+                    phase = .idle
+                    return
+                }
+                importStage = .checkingLibrary
+                let library = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryLookup() }.value
+                importStage = .importing
+                importTotal = todo.count
+                try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+                var seen: Set<String> = []
+
+                for item in todo {
+                    if Task.isCancelled {
+                        result.cancelled = true
+                        break
+                    }
+                    currentFile = item.primary.filename
+                    defer {
+                        importDone += 1
+                        if importDone % 25 == 0 { try? ledger.write(to: recordFolder) }
+                    }
+                    if library.contains(filename: item.primary.filename, date: item.primary.date) {
+                        ledger.recordPhone(item, deviceID: id, sha256: [:])
+                        result.alreadyInPhotos += 1
+                        continue
+                    }
+                    var downloaded: [URL] = []
+                    defer { downloaded.forEach { try? FileManager.default.removeItem(at: $0) } }
+                    do {
+                        var files: [String: ImportFile] = [:]
+                        var hashes: [String: String] = [:]
+                        for file in item.files {
+                            let url = try await devices.download(deviceID: id, path: file.relativePath, into: staging)
+                            downloaded.append(url)
+                            let sha = try await Task.detached { try BackupEngine.sha256(of: url.path) }.value
+                            files[file.relativePath] = ImportFile(url: url, sha256: sha, size: file.size)
+                            hashes[file.relativePath] = sha
+                        }
+                        let importItem = ImportItem(photo: item.photo.flatMap { files[$0.relativePath] },
+                                                    video: item.video.flatMap { files[$0.relativePath] })
+                        let shas = importItem.files.map(\.sha256)
+                        if shas.allSatisfy({ seen.contains($0) }) {
+                            result.duplicates += 1
+                        } else if shas.allSatisfy(ledger.contains) {
+                            result.previouslyImported += 1
+                        } else if library.contains(filename: importItem.primary.filename,
+                                                   date: await PhotoLibraryImporter.captureDate(of: importItem.primary.url)) {
+                            ledger.record(importItem, assetID: nil, existing: true)
+                            result.alreadyInPhotos += 1
+                        } else {
+                            let assetID = try await PhotoLibraryImporter.add(importItem)
+                            ledger.record(importItem, assetID: assetID, existing: false)
+                            library.add(filename: importItem.primary.filename, date: item.primary.date, id: assetID)
+                            result.imported += 1
+                        }
+                        seen.formUnion(shas)
+                        ledger.recordPhone(item, deviceID: id, sha256: hashes)
+                    } catch is CancellationError {
+                        result.cancelled = true
+                        break
+                    } catch {
+                        result.errors.append("\(item.primary.relativePath): \(error.localizedDescription)")
+                    }
+                }
+            }
+            do {
+                try ledger.write(to: recordFolder)
+            } catch {
+                result.errors.append(String(localized: "The import record could not be saved: \(error.localizedDescription)"))
+            }
+            importReport = result
+            phase = .finished
+            announceFinished()
+        } catch {
+            importReport = result
+            phase = .idle
+            if !(error is CancellationError) { alertMessage = error.localizedDescription }
+        }
+    }
+
     func answerImport(_ yes: Bool) {
         confirmingImport = false
         importDecision?.resume(returning: yes)
@@ -489,7 +625,7 @@ final class BackupModel {
                     return
                 }
                 importStage = .checkingLibrary
-                let index = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryIndex() }.value
+                let index = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryLookup() }.value
                 importStage = .importing
                 importTotal = plan.items.count
 

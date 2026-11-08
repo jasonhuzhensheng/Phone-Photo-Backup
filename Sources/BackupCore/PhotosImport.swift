@@ -6,6 +6,12 @@ public struct ImportFile: Sendable, Hashable {
     public let sha256: String
     public let size: Int64
     public var filename: String { url.lastPathComponent }
+
+    public init(url: URL, sha256: String, size: Int64) {
+        self.url = url
+        self.sha256 = sha256
+        self.size = size
+    }
 }
 
 /// What becomes one item in Photos: a photo, a video, or a Live Photo (photo + paired video).
@@ -58,10 +64,14 @@ public struct ImportLedger: Codable, Sendable {
 
     public var schemaVersion = 1
     public var files: [String: Entry] = [:]
+    /// Files handled by a direct import from a phone, by "device|path|size": the file's SHA-256,
+    /// or "in-photos" when it was found in Photos without being read. Absent in older records.
+    public var phoneFiles: [String: String]?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case files
+        case phoneFiles = "phone_files"
     }
 
     public init() {}

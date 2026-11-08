@@ -28,6 +28,8 @@ struct PhonePhotoBackupApp: App {
                 Button("Start Backup") { model.requestStart() }
                     .keyboardShortcut("b")
                     .disabled(!model.canStart)
+                Button("Import This Phone into Photos (No Backup)…") { model.importPhoneDirectly() }
+                    .disabled(!model.canImportPhone)
                 Button("Import All Backups into Photos…") { model.importAllBackups() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(!model.canImport)
