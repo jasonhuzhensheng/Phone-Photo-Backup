@@ -99,6 +99,8 @@ public enum BackupEngine {
     public static let manifestName = ".phone-photo-backup.json"
     public static let schemaVersion = 1
     static let chunkSize = 1 << 20
+    /// Larger writes for copies: external exFAT drives are much faster with big sequential writes.
+    static let copyChunkSize = 8 << 20
 
     // MARK: Planning
 
@@ -267,7 +269,7 @@ public enum BackupEngine {
         }
     }
 
-    private static func copyVerified(from source: String, to target: String, expectedHash: String, expected: FileSnapshot) throws {
+    static func copyVerified(from source: String, to target: String, expectedHash: String, expected: FileSnapshot) throws {
         let directory = (target as NSString).deletingLastPathComponent
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let name = (target as NSString).lastPathComponent
@@ -277,7 +279,7 @@ public enum BackupEngine {
             let reader = try FileHandle(forReadingFrom: URL(fileURLWithPath: source))
             defer { try? reader.close() }
             var hasher = SHA256()
-            while let chunk = try reader.read(upToCount: chunkSize), !chunk.isEmpty {
+            while let chunk = try reader.read(upToCount: copyChunkSize), !chunk.isEmpty {
                 try writer.write(contentsOf: chunk)
                 hasher.update(data: chunk)
             }

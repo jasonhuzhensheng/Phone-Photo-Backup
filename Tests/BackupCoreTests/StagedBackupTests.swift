@@ -159,6 +159,42 @@ final class DeviceFixture {
         #expect(f.plan().backupDirectory.lastPathComponent == "Test iPhone 2_backup")
     }
 
+    @Test func stagingHappensOutsideTheBackupFolderAndIsCleanedUp() async throws {
+        let f = try DeviceFixture()
+        let parent = f.root.appendingPathComponent("local-staging")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        // A leftover from an exited process is removed; one from a running process is kept.
+        let stale = "PhonePhotoBackup-staging-999999-old", live = "PhonePhotoBackup-staging-\(getpid())-live"
+        for name in [stale, live] {
+            try FileManager.default.createDirectory(at: parent.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
+        let report = try await BackupEngine.runStaged(f.plan(), fetch: f.device.fetch, stagingParent: parent)
+        #expect(report.copied > 0)
+        #expect(report.errors.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: parent.path) == [live])
+    }
+
+    @Test func crossVolumeCopyIsVerifiedAndKeepsDates() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ppb-copy-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("staged.bin").path
+        let bytes = Data((0..<(9 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 31) }) // spans two 8 MB chunks
+        try bytes.write(to: URL(fileURLWithPath: source))
+        let past = Date(timeIntervalSince1970: 1_600_000_000)
+        try FileManager.default.setAttributes([.modificationDate: past], ofItemAtPath: source)
+        let digest = try BackupEngine.sha256(of: source)
+        let target = root.appendingPathComponent("out/DCIM/IMG_0001.HEIC").path
+        try BackupEngine.copyVerified(from: source, to: target, expectedHash: digest, expected: FileSnapshot(path: source))
+        #expect(try Data(contentsOf: URL(fileURLWithPath: target)) == bytes)
+        #expect(try FileManager.default.attributesOfItem(atPath: target)[.modificationDate] as? Date == past)
+        #expect(throws: BackupError(.verificationFailed)) {
+            try BackupEngine.copyVerified(from: source, to: target + "-2", expectedHash: String(repeating: "0", count: 64),
+                                          expected: FileSnapshot(path: source))
+        }
+        #expect(!FileManager.default.fileExists(atPath: target + "-2"))
+    }
+
     @Test func devicePathsStayInsideTheBackupFolder() {
         #expect(BackupEngine.devicePath(["DCIM", "100APPLE", "IMG_0001.HEIC"]) == "DCIM/100APPLE/IMG_0001.HEIC")
         #expect(BackupEngine.devicePath(["..", "a/b", "", "c:d"]) == "_/a_b/_/c_d")
