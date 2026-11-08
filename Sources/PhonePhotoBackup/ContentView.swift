@@ -19,12 +19,13 @@ struct ContentView: View {
                 }
                 .padding(6)
             }
+            options
             StatusPanel()
                 .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
             actions
         }
         .padding(24)
-        .frame(minWidth: 620, idealWidth: 680, minHeight: 440)
+        .frame(minWidth: 620, idealWidth: 680, minHeight: 500)
         .alert("Backup error", isPresented: Binding(get: { model.alertMessage != nil },
                                                    set: { if !$0 { model.alertMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -36,9 +37,37 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let plan = model.plan {
-                Text("\(plan.files.count.formatted()) files, \(ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file)), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted.")
+                let size = ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file)
+                if model.importToPhotos {
+                    Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported.")
+                } else {
+                    Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted.")
+                }
             }
         }
+        .confirmationDialog("Import into Photos?", isPresented: Binding(
+            get: { model.confirmingImport },
+            set: { if !$0, model.confirmingImport { model.answerImport(false) } }
+        )) {
+            Button("Import") { model.answerImport(true) }
+            Button("Cancel", role: .cancel) { model.answerImport(false) }
+        } message: {
+            if let pending = model.pendingImport {
+                Text("Up to \(pending.count.formatted()) photos and videos (\(ByteCountFormatter.string(fromByteCount: pending.bytes, countStyle: .file))) will be added to Photos, in the album “\(PhotoLibraryImporter.albumName)”. Items already in Photos are skipped. With iCloud Photos turned on, they sync to your other devices.")
+            }
+        }
+    }
+
+    private var options: some View {
+        @Bindable var model = model
+        return VStack(alignment: .leading, spacing: 6) {
+            Toggle("Import into Photos after each backup (iCloud Photos then syncs them to your other devices)",
+                   isOn: $model.importToPhotos)
+            Toggle("Start automatically when a phone is connected", isOn: $model.autoStart)
+        }
+        .toggleStyle(.checkbox)
+        .disabled(model.isBusy)
+        .padding(.horizontal, 4)
     }
 
     private var header: some View {
@@ -59,15 +88,24 @@ struct ContentView: View {
 
     private var actions: some View {
         HStack {
-            Label("Everything stays on this Mac. No cloud upload.", systemImage: "lock.shield")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Group {
+                if model.importToPhotos {
+                    Label("Backups stay on this Mac. Photos syncs imports through your own iCloud Photos.", systemImage: "lock.shield")
+                } else {
+                    Label("Everything stays on this Mac. No cloud upload.", systemImage: "lock.shield")
+                }
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
             Spacer()
             switch model.phase {
-            case .backingUp, .scanning:
+            case .backingUp, .scanning, .importing:
                 Button("Stop", role: .cancel) { model.cancel() }
                     .keyboardShortcut(.cancelAction)
             default:
+                Button("Import into Photos") { model.importAllBackups() }
+                    .disabled(!model.canImport)
+                    .help("Add all backups in the backup location to Photos, skipping duplicates")
                 Button("Scan Source") { model.scan() }
                     .disabled(!model.canScan)
                     .keyboardShortcut(model.canStart ? nil : .defaultAction)
@@ -274,8 +312,17 @@ private struct StatusPanel: View {
                     if let plan = model.plan { PlanSummary(plan: plan) }
                 case .backingUp:
                     progress
+                case .importing:
+                    importProgress
                 case .finished:
-                    if let report = model.report { ReportSummary(report: report) }
+                    VStack(alignment: .leading, spacing: 14) {
+                        if let report = model.report { ReportSummary(report: report) }
+                        if let result = model.importReport { ImportSummary(result: result) }
+                        if model.autoStart, case .device = model.source {
+                            Label("Done. You can unplug this phone and connect the next one.", systemImage: "arrow.triangle.2.circlepath")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -309,6 +356,37 @@ private struct StatusPanel: View {
                 .truncationMode(.middle)
             if case .device = model.source {
                 deviceNotice
+            }
+        }
+    }
+
+    @ViewBuilder private var importProgress: some View {
+        switch model.importStage {
+        case .preparing:
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("Finding photos and videos to import…")
+            }
+        case .checkingLibrary:
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text("Checking which photos are already in Photos…")
+            }
+        case .importing:
+            VStack(alignment: .leading, spacing: 8) {
+                ProgressView(value: model.fractionComplete)
+                HStack {
+                    Text("Importing into Photos: \(model.importDone.formatted()) of \(model.importTotal.formatted())")
+                    Spacer()
+                    Text(verbatim: model.fractionComplete.formatted(.percent.precision(.fractionLength(0))))
+                        .monospacedDigit()
+                }
+                .font(.callout)
+                Text(verbatim: model.currentFile)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
     }
@@ -353,6 +431,59 @@ private struct PlanSummary: View {
                     .truncationMode(.middle)
                     .textSelection(.enabled)
             }
+        }
+    }
+}
+
+private struct ImportSummary: View {
+    @State private var showErrors = false
+    let result: BackupModel.ImportReport
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label {
+                Text(title).font(.headline)
+            } icon: {
+                Image(systemName: icon).foregroundStyle(color)
+            }
+            HStack(spacing: 24) {
+                stat("Imported", result.imported)
+                stat("Already in Photos", result.alreadyInPhotos + result.previouslyImported)
+                stat("Duplicates skipped", result.duplicates)
+                stat("Errors", result.errors.count)
+                Spacer()
+            }
+            if !result.errors.isEmpty {
+                DisclosureGroup("Show errors", isExpanded: $showErrors) {
+                    ScrollView {
+                        Text(verbatim: result.errors.joined(separator: "\n"))
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 120)
+                }
+            }
+        }
+    }
+
+    private var title: LocalizedStringKey {
+        if result.cancelled { return "Import stopped. Run it again to continue." }
+        return result.errors.isEmpty ? "Imported into Photos" : "Import finished with errors"
+    }
+
+    private var icon: String {
+        result.cancelled ? "pause.circle.fill" : result.errors.isEmpty ? "photo.on.rectangle.angled" : "exclamationmark.triangle.fill"
+    }
+
+    private var color: Color {
+        result.cancelled ? .secondary : result.errors.isEmpty ? .green : .orange
+    }
+
+    private func stat(_ label: LocalizedStringKey, _ value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(verbatim: value.formatted()).font(.title3.monospacedDigit())
         }
     }
 }

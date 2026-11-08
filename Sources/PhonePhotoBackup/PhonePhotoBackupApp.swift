@@ -29,9 +29,12 @@ struct PhonePhotoBackupApp: App {
                 Button("Start Backup") { model.requestStart() }
                     .keyboardShortcut("b")
                     .disabled(!model.canStart)
+                Button("Import All Backups into Photos…") { model.importAllBackups() }
+                    .keyboardShortcut("i", modifiers: [.command, .shift])
+                    .disabled(!model.canImport)
                 Button("Stop") { model.cancel() }
                     .keyboardShortcut(".")
-                    .disabled(model.phase != .backingUp)
+                    .disabled(!model.isBusy)
                 Divider()
                 Button("Show Backup Folder in Finder") { model.revealBackupFolder() }
                     .disabled(model.plan == nil && model.report == nil)

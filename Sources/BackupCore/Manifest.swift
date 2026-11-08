@@ -84,18 +84,15 @@ struct Manifest: Codable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         var data = try encoder.encode(self)
         data.append(0x0A)
-        let directory = (path as NSString).deletingLastPathComponent
-        let temporary = (directory as NSString)
-            .appendingPathComponent(".photo-backup-manifest-\(UUID().uuidString.lowercased()).tmp")
-        do {
-            let handle = try FS.createExclusive(temporary)
-            try handle.write(contentsOf: data)
-            try handle.synchronize()
-            try handle.close()
-            guard rename(temporary, path) == 0 else { throw FS.posixError(path) }
-        } catch {
-            unlink(temporary)
-            throw error
-        }
+        try FS.writeAtomically(data, to: path)
+    }
+
+    /// Reads a manifest without checking which source it belongs to.
+    static func read(from path: String) throws -> Manifest {
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        guard let manifest = try? JSONDecoder().decode(Manifest.self, from: data),
+              manifest.schemaVersion == BackupEngine.schemaVersion
+        else { throw BackupError(.manifestUnreadable) }
+        return manifest
     }
 }

@@ -11,10 +11,22 @@ A native macOS app (Swift + SwiftUI) for backing up the photos and videos on a p
 - Re-running the backup skips unchanged files. If a file changed, the existing copy is preserved and the new version is saved as a conflict copy (`photo.conflict-1a2b3c4d.jpg`).
 - Write a local JSON manifest (`.phone-photo-backup.json`) with relative paths, hashes, sizes and version timestamps. The format is unchanged from the earlier Python version, so existing backups continue to work.
 - A backup can be stopped at any time and resumed by running it again. The Mac is kept awake while copying.
+- Optionally import into the Photos app after each backup, so iCloud Photos puts everything on your current iPhone. Identical files from several phones are imported once; photos already in Photos (same file name and capture time) and files imported before are skipped. Live Photos stay Live Photos. Imports are collected in the album "Imported from Old Phones".
+- Automatic mode: turn on "Start automatically when a phone is connected", then plug in old phones one after another. Each is scanned, backed up and imported without any clicks; a sound plays when it is done.
+- Phones with the same name ("iPhone") get separate backup folders (`iPhone_backup`, `iPhone 2_backup`).
 - If the phone locks or is unplugged during a backup, the backup pauses and continues by itself once the phone is connected and unlocked again. Files already in the backup are not read from the phone again.
 - Works on APFS, HFS+ and exFAT drives. Never modifies or deletes source files. Symlinks are skipped.
 
 This version does not read the Photos library on the Mac, restore files, sync to cloud storage, or encrypt the destination. Photos kept only in iCloud ("Optimize iPhone Storage") are not on the phone and cannot be copied over USB. Android phones in "File transfer (MTP)" mode are not visible to macOS; switch them to "Transfer photos (PTP)". When a folder is the source, all regular files inside it are copied.
+
+### Moving many old phones onto your current iPhone
+
+1. On the Mac, open Photos and turn on iCloud Photos with the same Apple ID as your current iPhone. Make sure there is enough iCloud storage. Wait until Photos shows "Updated".
+2. In this app, choose a backup location (an external drive is best) and turn on both checkboxes.
+3. Plug in the old phones one at a time. Unlock each one and tap **Trust**. When the sound plays, unplug it and connect the next.
+4. Photos uploads the imports to iCloud and they appear on your iPhone. Keep the backup folders.
+
+**Import into Photos** (⇧⌘I) imports every backup in the backup location at any time, after showing how many items will be added.
 
 ### Backing up from a phone
 

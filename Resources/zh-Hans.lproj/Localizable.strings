@@ -76,3 +76,29 @@
 "Choose Backup Location…" = "选择备份位置…";
 "Backup" = "备份";
 "Show Backup Folder in Finder" = "在访达中显示备份文件夹";
+
+/* Importing into Photos */
+"Phone Photo Backup is not allowed to use Photos. Allow it in System Settings > Privacy & Security > Photos, then try again." = "“手机照片备份”没有使用“照片”的权限。请在“系统设置 > 隐私与安全性 > 照片”中允许后再试。";
+"Imported from Old Phones" = "从旧手机导入";
+"There are no backups in the backup location yet." = "备份位置里还没有备份。";
+"The import record could not be saved: %@" = "无法保存导入记录：%@";
+"%@ files, %@, will be copied into:\n%@\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported." = "将把 %1$@ 个文件（%2$@）复制到：\n%3$@\n\n原文件不会被修改或删除。完成后，“照片”里还没有的照片和视频会被导入。";
+"Import into Photos?" = "导入到“照片”？";
+"Import" = "导入";
+"Up to %@ photos and videos (%@) will be added to Photos, in the album “%@”. Items already in Photos are skipped. With iCloud Photos turned on, they sync to your other devices." = "最多将有 %1$@ 项照片和视频（%2$@）添加到“照片”的“%3$@”相簿。已在“照片”里的会跳过。如果打开了 iCloud 照片，它们会同步到你的其他设备。";
+"Import into Photos after each backup (iCloud Photos then syncs them to your other devices)" = "每次备份后导入到“照片”（再由 iCloud 照片同步到你的其他设备）";
+"Start automatically when a phone is connected" = "接入手机后自动开始";
+"Import into Photos" = "导入“照片”";
+"Add all backups in the backup location to Photos, skipping duplicates" = "把备份位置里的所有备份导入“照片”，跳过重复项";
+"Import All Backups into Photos…" = "把所有备份导入“照片”…";
+"Done. You can unplug this phone and connect the next one." = "完成。可以拔下这部手机，接上下一部。";
+"Finding photos and videos to import…" = "正在查找要导入的照片和视频…";
+"Checking which photos are already in Photos…" = "正在检查哪些照片已经在“照片”里…";
+"Importing into Photos: %@ of %@" = "正在导入“照片”：%1$@ / %2$@";
+"Imported" = "已导入";
+"Already in Photos" = "已在“照片”中";
+"Duplicates skipped" = "跳过的重复项";
+"Import stopped. Run it again to continue." = "导入已停止。再次运行即可继续。";
+"Imported into Photos" = "已导入“照片”";
+"Import finished with errors" = "导入完成，但有错误";
+"Backups stay on this Mac. Photos syncs imports through your own iCloud Photos." = "备份留在这台 Mac 上；导入“照片”的内容由你自己的 iCloud 照片同步。";

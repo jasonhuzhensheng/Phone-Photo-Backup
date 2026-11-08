@@ -6,7 +6,20 @@ import Observation
 @MainActor @Observable
 final class BackupModel {
     enum Phase: Equatable {
-        case idle, scanning, ready, backingUp, finished
+        case idle, scanning, ready, backingUp, importing, finished
+    }
+
+    enum ImportStage: Equatable {
+        case preparing, checkingLibrary, importing
+    }
+
+    struct ImportReport {
+        var imported = 0
+        var alreadyInPhotos = 0
+        var duplicates = 0
+        var previouslyImported = 0
+        var errors: [String] = []
+        var cancelled = false
     }
 
     /// Where files are read from: a folder on this Mac, or a phone connected over USB.
@@ -27,17 +40,45 @@ final class BackupModel {
     var alertMessage: String?
     var confirmingStart = false
 
+    // Importing into Photos
+    private(set) var importStage = ImportStage.preparing
+    private(set) var importDone = 0
+    private(set) var importTotal = 0
+    private(set) var importReport: ImportReport?
+    /// Item count and size shown while asking whether to import.
+    private(set) var pendingImport: (count: Int, bytes: Int64)?
+    var confirmingImport = false
+    @ObservationIgnored private var importDecision: CheckedContinuation<Bool, Never>?
+
+    /// Import new photos and videos into Photos after each backup.
+    var importToPhotos: Bool {
+        didSet { UserDefaults.standard.set(importToPhotos, forKey: Self.importKey) }
+    }
+    /// Scan, back up (and import) as soon as a phone is connected, with no questions.
+    var autoStart: Bool {
+        didSet {
+            UserDefaults.standard.set(autoStart, forKey: Self.autoStartKey)
+            if autoStart, case .device(let id) = source { runAutomaticallyIfNeeded(id) }
+        }
+    }
+    /// Phones already handled automatically since the app started.
+    @ObservationIgnored private var autoRan: Set<String> = []
+    /// The developer self-check must never touch a real phone or the Photos library.
+    private let isSelfCheck = ProcessInfo.processInfo.environment["PPB_SNAPSHOT_DIR"] != nil
+
     private var task: Task<Void, Never>?
     private static let sourceKey = "sourcePath", destinationKey = "destinationPath"
+    private static let importKey = "importToPhotos", autoStartKey = "autoStartOnConnect"
 
     init() {
         let defaults = UserDefaults.standard
         source = Self.existingFolder(defaults.string(forKey: Self.sourceKey)).map(Source.folder)
         destinationURL = Self.existingFolder(defaults.string(forKey: Self.destinationKey))
+        importToPhotos = defaults.bool(forKey: Self.importKey)
+        autoStart = defaults.bool(forKey: Self.autoStartKey)
         devices.onDeviceAdded = { [weak self] id in self?.deviceConnected(id) }
         devices.onDeviceRemoved = { [weak self] id in self?.deviceDisconnected(id) }
-        // The developer self-check must only ever touch its temporary folders, never a real phone.
-        if ProcessInfo.processInfo.environment["PPB_SNAPSHOT_DIR"] == nil {
+        if !isSelfCheck {
             devices.start()
         }
     }
@@ -50,11 +91,16 @@ final class BackupModel {
         if case .device(let id) = source { devices.device(id) } else { nil }
     }
 
-    var isBusy: Bool { phase == .scanning || phase == .backingUp }
+    var isBusy: Bool { phase == .scanning || phase == .backingUp || phase == .importing }
     var canScan: Bool { !isBusy && source != nil && destinationURL != nil }
+    var canImport: Bool { !isBusy && destinationURL != nil }
+    private var importsAfterBackup: Bool { importToPhotos && !isSelfCheck }
     var canStart: Bool { !isBusy && plan != nil && phase == .ready }
 
     var fractionComplete: Double {
+        if phase == .importing {
+            return importTotal > 0 ? Double(importDone) / Double(importTotal) : 0
+        }
         guard let plan else { return 0 }
         if plan.totalBytes > 0 { return min(1, Double(processedBytes) / Double(plan.totalBytes)) }
         return plan.files.isEmpty ? 1 : Double(processedFiles) / Double(plan.files.count)
@@ -75,9 +121,25 @@ final class BackupModel {
         invalidatePlan()
     }
 
-    /// A phone that is plugged in while the app is idle becomes the source.
+    /// A phone that is plugged in while the app is idle becomes the source. In automatic mode it
+    /// is then scanned, backed up and (if chosen) imported into Photos right away.
     private func deviceConnected(_ id: String) {
-        if !isBusy, sourceDevice == nil { setSourceDevice(id) }
+        guard !isBusy else { return }
+        if sourceDevice == nil || autoStart { setSourceDevice(id) }
+        runAutomaticallyIfNeeded(id)
+    }
+
+    private func runAutomaticallyIfNeeded(_ id: String) {
+        guard autoStart, !isSelfCheck, !isBusy, source == .device(id), destinationURL != nil,
+              !autoRan.contains(id) else { return }
+        autoRan.insert(id)
+        scan()
+        let scanning = task
+        Task {
+            await scanning?.value
+            guard phase == .ready, source == .device(id) else { return }
+            startBackup()
+        }
     }
 
     private func deviceDisconnected(_ id: String) {
@@ -119,6 +181,7 @@ final class BackupModel {
     private func invalidatePlan() {
         plan = nil
         report = nil
+        importReport = nil
         phase = .idle
     }
 
@@ -128,6 +191,7 @@ final class BackupModel {
         guard canScan, let source, let destination = destinationURL else { return }
         plan = nil
         report = nil
+        importReport = nil
         phase = .scanning
         task = Task {
             let result: Result<BackupPlan, Error>
@@ -140,8 +204,8 @@ final class BackupModel {
                 do {
                     try await devices.waitUntilReady(id)
                     let catalog = try devices.catalog(of: id)
-                    result = .success(BackupEngine.makeDevicePlan(deviceName: catalog.name, files: catalog.files,
-                                                                  destination: destination))
+                    result = .success(BackupEngine.makeDevicePlan(deviceName: catalog.name, deviceID: id,
+                                                                  files: catalog.files, destination: destination))
                 } catch {
                     result = .failure(error)
                 }
@@ -172,6 +236,7 @@ final class BackupModel {
         processedBytes = 0
         currentFile = ""
         report = nil
+        importReport = nil
 
         task = Task {
             // Keep the Mac awake while copying.
@@ -206,13 +271,120 @@ final class BackupModel {
             switch result {
             case .success(let report):
                 self.report = report
-                self.phase = .finished
-                NSApp.requestUserAttention(.informationalRequest)
+                if self.importsAfterBackup, !report.cancelled, let destination = self.destinationURL {
+                    await self.performImport(folders: [report.backupDirectory], destination: destination, confirm: false)
+                } else {
+                    self.phase = .finished
+                    self.announceFinished()
+                }
             case .failure(let error):
                 self.phase = .ready
                 self.alertMessage = error.localizedDescription
             }
         }
+    }
+
+    // MARK: Importing into Photos
+
+    /// Imports every backup in the backup location into Photos, after showing what will be added.
+    func importAllBackups() {
+        guard canImport, let destination = destinationURL else { return }
+        let folders = PhotosImport.backupFolders(in: destination)
+        guard !folders.isEmpty else {
+            alertMessage = String(localized: "There are no backups in the backup location yet.")
+            return
+        }
+        report = nil
+        task = Task { await performImport(folders: folders, destination: destination, confirm: true) }
+    }
+
+    func answerImport(_ yes: Bool) {
+        confirmingImport = false
+        importDecision?.resume(returning: yes)
+        importDecision = nil
+    }
+
+    private func askToImport(count: Int, bytes: Int64) async -> Bool {
+        pendingImport = (count, bytes)
+        return await withCheckedContinuation { continuation in
+            importDecision = continuation
+            confirmingImport = true
+        }
+    }
+
+    /// Adds the photos and videos in `folders` that are not in Photos yet. Identical files in
+    /// several backups are added once; files already imported (recorded in the ledger) or already
+    /// in the library (same name and capture time) are skipped.
+    private func performImport(folders: [URL], destination: URL, confirm: Bool) async {
+        guard !isSelfCheck else { phase = .finished; return }
+        phase = .importing
+        importStage = .preparing
+        importDone = 0
+        importTotal = 0
+        currentFile = ""
+        importReport = nil
+        var result = ImportReport()
+        do {
+            try await PhotoLibraryImporter.authorize()
+            var ledger = try ImportLedger.load(from: destination)
+            let snapshot = ledger
+            let plan = try await Task.detached(priority: .userInitiated) {
+                try PhotosImport.makePlan(backupFolders: folders, ledger: snapshot)
+            }.value
+            result.duplicates = plan.duplicateFiles
+            result.previouslyImported = plan.previouslyImportedFiles
+
+            if !plan.items.isEmpty {
+                if confirm, !(await askToImport(count: plan.items.count, bytes: plan.totalBytes)) {
+                    phase = report == nil ? .idle : .finished
+                    return
+                }
+                importStage = .checkingLibrary
+                let index = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryIndex() }.value
+                importStage = .importing
+                importTotal = plan.items.count
+
+                for item in plan.items {
+                    if Task.isCancelled {
+                        result.cancelled = true
+                        break
+                    }
+                    currentFile = item.primary.filename
+                    let date = await PhotoLibraryImporter.captureDate(of: item.primary.url)
+                    if index.contains(filename: item.primary.filename, date: date) {
+                        ledger.record(item, assetID: nil, existing: true)
+                        result.alreadyInPhotos += 1
+                    } else {
+                        do {
+                            let id = try await PhotoLibraryImporter.add(item)
+                            ledger.record(item, assetID: id, existing: false)
+                            result.imported += 1
+                        } catch {
+                            result.errors.append("\(item.primary.url.path): \(error.localizedDescription)")
+                        }
+                    }
+                    importDone += 1
+                    if importDone % 25 == 0 { try? ledger.write(to: destination) }
+                }
+            }
+            do {
+                try ledger.write(to: destination)
+            } catch {
+                result.errors.append(String(localized: "The import record could not be saved: \(error.localizedDescription)"))
+            }
+            importReport = result
+            phase = .finished
+            announceFinished()
+        } catch {
+            importReport = result
+            phase = report == nil ? .idle : .finished
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func announceFinished() {
+        NSApp.requestUserAttention(.informationalRequest)
+        if autoStart { NSSound(named: "Glass")?.play() }
     }
 
     func cancel() {

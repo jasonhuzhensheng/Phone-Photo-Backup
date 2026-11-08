@@ -61,6 +61,8 @@ public struct BackupPlan: Sendable {
     public let sourceName: String
     /// The source folder, or nil when the files come from a connected device.
     public let sourceDirectory: URL?
+    /// Stable identifier of the source device; nil for folders.
+    public var deviceID: String? = nil
     public let backupDirectory: URL
     public let files: [PlannedFile]
     public let totalBytes: Int64

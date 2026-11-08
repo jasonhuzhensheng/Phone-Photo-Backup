@@ -2,7 +2,7 @@
 
 ## 项目状态
 
-项目名称：Phone Photo Backup（手机照片备份）。目标是将手机里的照片和视频（USB 直连读取，或已导出的文件夹）备份到用户指定的本地位置；不上传云端。现有实现为 macOS 原生应用：Swift 6 + SwiftUI，最低 macOS 14，使用 Swift Package Manager 构建，需要完整 Xcode（已在 Xcode 27.2 验证；只装 Command Line Tools 的 Mac 上 SwiftUI 的 `@State` 曾无法编译）。
+项目名称：Phone Photo Backup（手机照片备份）。目标是将手机里的照片和视频（USB 直连读取，或已导出的文件夹）备份到用户指定的本地位置，并可选择导入 Mac 的「照片」（再由用户自己的 iCloud 照片同步到其他设备）；应用本身不上传任何内容。现有实现为 macOS 原生应用：Swift 6 + SwiftUI，最低 macOS 14，使用 Swift Package Manager 构建，需要完整 Xcode（已在 Xcode 27.2 验证；只装 Command Line Tools 的 Mac 上 SwiftUI 的 `@State` 曾无法编译）。
 
 ## 文档入口
 
@@ -50,4 +50,4 @@ swift run PhonePhotoBackup      # 开发时无 bundle 启动（英文界面）
 
 界面状态写法：跨视图共享的状态放在 `BackupModel`（`@Observable`），视图私有的状态（拖放高亮、展开/折叠等）用标准 `@State`；应用入口用 `@State` 持有模型并通过 `.environment` 下发。新增界面文字时同步更新 `Resources/zh-Hans.lproj/Localizable.strings`。
 
-`PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份、把窗口截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用；此模式下不搜索手机，避免误读连接着的真实手机。测试必须使用临时模拟文件，不读取真实照片；手机直连的引擎逻辑用 `StagedBackupTests` 里的模拟设备测试，真机流程需由用户手动验收。
+`PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份、把窗口截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用；此模式下不搜索手机、不导入「照片」、不自动开始，避免误读真实手机或往真实图库写入测试文件。PhotoKit 导入只能由用户在自己的图库上验收。测试必须使用临时模拟文件，不读取真实照片；手机直连的引擎逻辑用 `StagedBackupTests` 里的模拟设备测试，真机流程需由用户手动验收。
