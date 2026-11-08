@@ -257,7 +257,7 @@ final class BackupModel {
     func requestStart() {
         guard canStart else { return }
         if reviewBeforeBackup, !isSelfCheck, case .device(let id) = source {
-            let session = ReviewSession(deviceID: id)
+            let session = ReviewSession(deviceID: id, purpose: .backup)
             review = session
             session.start(devices: devices)
         } else {
@@ -453,12 +453,65 @@ final class BackupModel {
         return true
     }
 
-    /// Imports the phone's photos and videos straight into Photos, without saving a backup.
+    /// Imports the phone's photos and videos straight into Photos, without saving a backup. When
+    /// the review is turned on, the largest videos and duplicates are listed first so some can be
+    /// deleted before importing.
     func importPhoneDirectly() {
         guard canImportPhone, case .device(let id) = source else { return }
         report = nil
         deletionReport = nil
-        task = Task { await performDirectImport(deviceID: id) }
+        guard reviewBeforeBackup, !isSelfCheck else {
+            task = Task { await performDirectImport(deviceID: id) }
+            return
+        }
+        let previous = phase
+        phase = .importing
+        importStage = .preparing
+        importReport = nil
+        task = Task {
+            do {
+                try await devices.waitUntilReady(id)
+                _ = try devices.catalog(of: id)
+                phase = previous
+                let session = ReviewSession(deviceID: id, purpose: .directImport)
+                review = session
+                session.start(devices: devices)
+            } catch {
+                phase = previous
+                if !(error is CancellationError) { alertMessage = error.localizedDescription }
+            }
+        }
+    }
+
+    /// Ends the review before a direct import and imports everything, deleting nothing.
+    func importAfterReview() {
+        guard let review, review.purpose == .directImport else { return }
+        review.cancel()
+        self.review = nil
+        task = Task { await performDirectImport(deviceID: review.deviceID, confirm: false) }
+    }
+
+    /// "Delete first, then import": moves the selected items to Recently Deleted in Photos (those
+    /// already there), then imports the rest of the phone. Selected items are not imported, whether
+    /// or not they were found in Photos, and the import record remembers them so a later direct
+    /// import leaves them out too. If deleting fails the list stays open with the error.
+    func deleteSelectedThenImport() {
+        guard let review, review.purpose == .directImport, !review.isDeleting, !review.selected.isEmpty else { return }
+        let items = review.selectedItems
+        review.beginDeletion()
+        deletionTask = Task {
+            let result = await deleteThroughPhotos(items, requireBackup: false, backupDirectory: nil, destination: nil)
+            review.finishDeletion(result, removed: Set(result.deletedPaths))
+            guard result.error == nil, self.review === review else { return }
+            review.cancel()
+            self.review = nil
+            let deleted = Set(result.deletedPaths)
+            let excluded = Dictionary(uniqueKeysWithValues: items.map {
+                ($0.relativePath, deleted.contains($0.relativePath) ? ImportLedger.deletedInReview : ImportLedger.skippedInReview)
+            })
+            self.task = Task { await self.performDirectImport(deviceID: review.deviceID, excluding: excluded, confirm: false) }
+            self.deletionReport = result // shown with the import result
+        }
     }
 
     /// Where the import record is kept: the backup location when one is chosen (shared with
@@ -481,7 +534,9 @@ final class BackupModel {
     ///    from a backup import or in another folder), then added to Photos;
     /// 4. the temporary copy is removed. Nothing is written to the backup location except the
     ///    import record.
-    private func performDirectImport(deviceID id: String) async {
+    /// `excluding` maps phone paths chosen in the review to their import-record value; those items
+    /// (a Live Photo when either half is chosen) are recorded and not imported.
+    private func performDirectImport(deviceID id: String, excluding: [String: String] = [:], confirm: Bool = true) async {
         phase = .importing
         importStage = .preparing
         importDone = 0
@@ -498,12 +553,17 @@ final class BackupModel {
             var ledger = try ImportLedger.load(from: recordFolder)
             try await devices.waitUntilReady(id)
             _ = try devices.catalog(of: id)
-            let all = PhotosImport.phoneItems(devices.items(of: id))
+            let split = PhotosImport.split(PhotosImport.phoneItems(devices.items(of: id)), excluding: Set(excluding.keys))
+            for item in split.excluded {
+                let value = item.files.lazy.compactMap { excluding[$0.relativePath] }.first ?? ImportLedger.skippedInReview
+                ledger.recordPhone(item, deviceID: id, as: value)
+            }
+            let all = split.kept
             let todo = all.filter { !ledger.handled($0, deviceID: id) }
             result.previouslyImported = all.count - todo.count
 
             if !todo.isEmpty {
-                guard await askToImport(count: todo.count, bytes: todo.reduce(0) { $0 + $1.size }) else {
+                if confirm, !(await askToImport(count: todo.count, bytes: todo.reduce(0) { $0 + $1.size })) {
                     phase = .idle
                     return
                 }

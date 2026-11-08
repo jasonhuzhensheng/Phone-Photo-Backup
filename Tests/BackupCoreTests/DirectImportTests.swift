@@ -55,4 +55,25 @@ import Testing
         let again = try JSONDecoder().decode(ImportLedger.self, from: JSONEncoder().encode(ledger))
         #expect(again.handled(grouped[1], deviceID: "A"))
     }
+
+    @Test func itemsChosenInTheReviewAreLeftOutWholeAndRemembered() {
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let grouped = PhotosImport.phoneItems([
+            PhoneItem(relativePath: "DCIM/100APPLE/IMG_0001.MOV", size: 900, date: day),
+            PhoneItem(relativePath: "DCIM/100APPLE/IMG_0002.HEIC", size: 10, date: day.addingTimeInterval(60)),
+            PhoneItem(relativePath: "DCIM/100APPLE/IMG_0002.MOV", size: 20, date: day.addingTimeInterval(60)),
+            PhoneItem(relativePath: "DCIM/100APPLE/IMG_0003.JPG", size: 5, date: day.addingTimeInterval(120)),
+        ])
+        // Selecting only the video half of a Live Photo leaves the whole Live Photo out.
+        let split = PhotosImport.split(grouped, excluding: ["DCIM/100APPLE/IMG_0001.MOV", "DCIM/100APPLE/IMG_0002.MOV"])
+        #expect(split.kept.map(\.primary.filename) == ["IMG_0003.JPG"])
+        #expect(split.excluded.map(\.primary.filename) == ["IMG_0001.MOV", "IMG_0002.HEIC"])
+
+        var ledger = ImportLedger()
+        ledger.recordPhone(split.excluded[0], deviceID: "A", as: ImportLedger.skippedInReview)
+        ledger.recordPhone(split.excluded[1], deviceID: "A", as: ImportLedger.deletedInReview)
+        #expect(split.excluded.allSatisfy { ledger.handled($0, deviceID: "A") })
+        #expect(ledger.phoneFiles?["A|DCIM/100APPLE/IMG_0002.HEIC|10"] == "deleted")
+        #expect(!ledger.handled(split.kept[0], deviceID: "A"))
+    }
 }

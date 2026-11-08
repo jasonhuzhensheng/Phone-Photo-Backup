@@ -75,7 +75,7 @@ struct ContentView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Toggle("Import into Photos after each backup (iCloud Photos then syncs them to your other devices)",
                    isOn: $model.importToPhotos)
-            Toggle("Before backing up a phone, list the largest videos and duplicates to delete", isOn: $model.reviewBeforeBackup)
+            Toggle("Before backing up or importing a phone, list the largest videos and duplicates to delete", isOn: $model.reviewBeforeBackup)
             Toggle("Start automatically when a phone is connected (skips the list)", isOn: $model.autoStart)
         }
         .toggleStyle(.checkbox)

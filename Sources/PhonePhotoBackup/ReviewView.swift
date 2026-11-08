@@ -3,8 +3,9 @@ import BackupCore
 import Observation
 import SwiftUI
 
-/// The step before a phone backup: lists the largest videos and exact duplicates so the user can
-/// pick what to delete. Deleting happens later, through Photos, so items go to Recently Deleted.
+/// The step before a phone backup or a direct import into Photos: lists the largest videos and
+/// exact duplicates so the user can pick what to delete. Deleting goes through Photos, so items go
+/// to Recently Deleted.
 @MainActor @Observable
 final class ReviewSession {
     enum Stage: Equatable {
@@ -13,7 +14,11 @@ final class ReviewSession {
         case failed(String)
     }
 
+    /// What happens after the review.
+    enum Purpose { case backup, directImport }
+
     let deviceID: String
+    let purpose: Purpose
     private(set) var stage = Stage.hashing(done: 0, total: 0)
     private(set) var largeVideos: [PhoneItem] = []
     private(set) var duplicates: [DuplicateGroup] = []
@@ -31,7 +36,10 @@ final class ReviewSession {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var requestedThumbnails: Set<String> = []
 
-    init(deviceID: String) { self.deviceID = deviceID }
+    init(deviceID: String, purpose: Purpose) {
+        self.deviceID = deviceID
+        self.purpose = purpose
+    }
 
     var selectedItems: [PhoneItem] { selected.compactMap { items[$0] }.sorted { $0.relativePath < $1.relativePath } }
     var selectedBytes: Int64 { selectedItems.reduce(0) { $0 + $1.size } }
@@ -122,17 +130,26 @@ struct ReviewSheet: View {
     @State private var confirmingDelete = false
     @State private var previewing: PreviewTarget?
     @State private var confirmingDeleteFirst = false
+    @State private var confirmingDeleteThenImport = false
     /// How many of the selected items already have a backup copy (shown when deleting first).
     @State private var selectedBackedUp = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Review before backup").font(.title2.weight(.semibold))
-                Text("Click a picture to watch the video or see the photo full size. Pick what to delete, then either delete first and back up the rest, or back up first and delete afterwards. Deleted items go to Recently Deleted in Photos, where they can be recovered for 30 days; iCloud Photos then removes them from the phone too.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if isImport {
+                    Text("Review before importing into Photos").font(.title2.weight(.semibold))
+                    Text("Click a picture to watch the video or see the photo full size. Pick what you don't want, then delete it and import the rest. Selected items that are already in Photos go to Recently Deleted, where they can be recovered for 30 days, and iCloud Photos removes them from the phone too. Selected items are not imported either way.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Review before backup").font(.title2.weight(.semibold))
+                    Text("Click a picture to watch the video or see the photo full size. Pick what to delete, then either delete first and back up the rest, or back up first and delete afterwards. Deleted items go to Recently Deleted in Photos, where they can be recovered for 30 days; iCloud Photos then removes them from the phone too.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             List {
@@ -201,9 +218,11 @@ struct ReviewSheet: View {
             }
 
             HStack {
-                Toggle("Also back up the selected items (recommended)", isOn: $review.backUpSelected)
-                    .toggleStyle(.checkbox)
-                    .help("Applies to “Back Up, Then Delete Selected”. Items deleted first are not backed up.")
+                if !isImport {
+                    Toggle("Also back up the selected items (recommended)", isOn: $review.backUpSelected)
+                        .toggleStyle(.checkbox)
+                        .help("Applies to “Back Up, Then Delete Selected”. Items deleted first are not backed up.")
+                }
                 Spacer()
                 Text("Selected: \(review.selected.count.formatted()) items, \(ByteCountFormatter.string(fromByteCount: review.selectedBytes, countStyle: .file))")
                     .font(.callout)
@@ -215,16 +234,24 @@ struct ReviewSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Group {
-                Button("Back Up Without Deleting") { model.finishReview(delete: false) }
-                Button("Delete Selected, Then Back Up…", role: .destructive) {
-                    selectedBackedUp = model.plan.map { PhoneReview.backedUp(review.selectedItems, in: $0.backupDirectory).safe.count } ?? 0
-                    confirmingDeleteFirst = true
-                }
-                .disabled(review.selected.isEmpty)
-                .help("Move the selected items to Recently Deleted in Photos first, then back up the rest of the phone")
-                Button("Back Up, Then Delete Selected") { confirmingDelete = true }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(review.selected.isEmpty)
+                    if isImport {
+                        Button("Import Without Deleting") { model.importAfterReview() }
+                        Button("Delete Selected, Then Import…", role: .destructive) { confirmingDeleteThenImport = true }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(review.selected.isEmpty)
+                            .help("Move the selected items to Recently Deleted in Photos, then import the rest of the phone")
+                    } else {
+                        Button("Back Up Without Deleting") { model.finishReview(delete: false) }
+                        Button("Delete Selected, Then Back Up…", role: .destructive) {
+                            selectedBackedUp = model.plan.map { PhoneReview.backedUp(review.selectedItems, in: $0.backupDirectory).safe.count } ?? 0
+                            confirmingDeleteFirst = true
+                        }
+                        .disabled(review.selected.isEmpty)
+                        .help("Move the selected items to Recently Deleted in Photos first, then back up the rest of the phone")
+                        Button("Back Up, Then Delete Selected") { confirmingDelete = true }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(review.selected.isEmpty)
+                    }
                 }
                 .disabled(review.isDeleting) // Cancel stays available to stop a deletion
             }
@@ -243,6 +270,12 @@ struct ReviewSheet: View {
                                                   backupDirectory: model.plan?.backupDirectory))
                 .environment(model)
         }
+        .confirmationDialog("Delete the selected items, then import?", isPresented: $confirmingDeleteThenImport) {
+            Button("Delete, Then Import", role: .destructive) { model.deleteSelectedThenImport() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(review.selected.count.formatted()) items (\(ByteCountFormatter.string(fromByteCount: review.selectedBytes, countStyle: .file))) are not imported. Those already in Photos are moved to Recently Deleted now and can be recovered there for 30 days; there is no backup copy. Those not in Photos stay on the phone; delete them there if you don't want them. Later imports of this phone leave them out too. Then the rest of the phone is imported into Photos.")
+        }
         .confirmationDialog("Delete the selected items first?", isPresented: $confirmingDeleteFirst) {
             Button("Delete, Then Back Up", role: .destructive) { model.deleteSelectedThenBackUp() }
             Button("Cancel", role: .cancel) {}
@@ -260,6 +293,8 @@ struct ReviewSheet: View {
             }
         }
     }
+
+    private var isImport: Bool { review.purpose == .directImport }
 
     private func preview(_ item: PhoneItem) {
         previewing = PreviewTarget(id: item.relativePath)

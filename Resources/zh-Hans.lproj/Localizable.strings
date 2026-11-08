@@ -120,7 +120,7 @@
 "Back Up, Then Delete" = "备份后删除";
 "%@ items (%@) will be backed up first. Only items with a verified backup copy are then moved to Recently Deleted in Photos. Items not found in Photos are left alone." = "%1$@ 项（%2$@）会先备份。只有备份经核对无误的项目，才会在“照片”中移到“最近删除”。在“照片”里找不到的项目不会被删除。";
 "%@ items (%@) will NOT be backed up. They are moved to Recently Deleted in Photos and can be recovered there for 30 days only. Items not found in Photos are left alone." = "%1$@ 项（%2$@）不会备份。它们会在“照片”中移到“最近删除”，只能在 30 天内从那里恢复。在“照片”里找不到的项目不会被删除。";
-"Before backing up a phone, list the largest videos and duplicates to delete" = "备份手机前，列出最占空间的视频和重复项，选择要删除的";
+"Before backing up or importing a phone, list the largest videos and duplicates to delete" = "备份或导入手机前，列出最占空间的视频和重复项，选择要删除的";
 "Start automatically when a phone is connected (skips the list)" = "接入手机后自动开始（不显示检查清单）";
 "Moving the selected items to Recently Deleted in Photos…" = "正在把所选项目移到“照片”的“最近删除”…";
 "%@ of %@ selected items moved to Recently Deleted in Photos" = "已将所选 %2$@ 项中的 %1$@ 项移到“照片”的“最近删除”";
@@ -200,3 +200,13 @@
 "Import All Backups…" = "导入所有备份…";
 "Import This Phone into Photos (No Backup)…" = "把这部手机直接导入“照片”（不备份）…";
 "Add photos and videos to Photos, skipping ones already there: straight from the connected phone, or from all backups in the backup location" = "把照片和视频导入“照片”，已有的会跳过：可以直接从连接的手机导入，也可以从备份位置里的所有备份导入";
+
+/* Review before a direct import into Photos */
+"Review before importing into Photos" = "导入“照片”前检查";
+"Click a picture to watch the video or see the photo full size. Pick what you don't want, then delete it and import the rest. Selected items that are already in Photos go to Recently Deleted, where they can be recovered for 30 days, and iCloud Photos removes them from the phone too. Selected items are not imported either way." = "点按图片可以播放视频或查看大图。选出不想要的项目，删除后再导入其余内容。所选项目如果已在“照片”里，会进入“最近删除”，30 天内可以恢复，iCloud 照片也会把它们从手机上删除。无论是否在“照片”里，所选项目都不会导入。";
+"Import Without Deleting" = "只导入，不删除";
+"Delete Selected, Then Import…" = "删除所选项目，再导入…";
+"Move the selected items to Recently Deleted in Photos, then import the rest of the phone" = "先把所选项目移到“照片”的“最近删除”，再导入手机上的其余内容";
+"Delete the selected items, then import?" = "删除所选项目后再导入？";
+"Delete, Then Import" = "删除后导入";
+"%@ items (%@) are not imported. Those already in Photos are moved to Recently Deleted now and can be recovered there for 30 days; there is no backup copy. Those not in Photos stay on the phone; delete them there if you don't want them. Later imports of this phone leave them out too. Then the rest of the phone is imported into Photos." = "%1$@ 项（%2$@）不会导入。其中已在“照片”里的现在移到“最近删除”，30 天内可以恢复，但没有备份副本。不在“照片”里的仍留在手机上，不想要的话请在手机上删除。以后导入这部手机时也会跳过它们。然后把手机上的其余内容导入“照片”。";

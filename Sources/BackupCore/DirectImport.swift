@@ -116,6 +116,22 @@ extension PhotosImport {
         }
     }
 
+    /// Splits `items` into those to import and those with a file in `paths`. A Live Photo is left
+    /// out whole when either of its files is in `paths`: deleting it in Photos removes both.
+    public static func split(_ items: [PhoneImportItem], excluding paths: Set<String>)
+        -> (kept: [PhoneImportItem], excluded: [PhoneImportItem]) {
+        var kept: [PhoneImportItem] = []
+        var excluded: [PhoneImportItem] = []
+        for item in items {
+            if item.files.contains(where: { paths.contains($0.relativePath) }) {
+                excluded.append(item)
+            } else {
+                kept.append(item)
+            }
+        }
+        return (kept, excluded)
+    }
+
     private static func single(_ item: PhoneItem) -> PhoneImportItem {
         imageExtensions.contains((item.relativePath as NSString).pathExtension.lowercased())
             ? PhoneImportItem(photo: item, video: nil) : PhoneImportItem(photo: nil, video: item)
@@ -132,6 +148,19 @@ extension ImportLedger {
     /// Photos, or deleted), so it is not read from the phone again.
     public func handled(_ item: PhoneImportItem, deviceID: String) -> Bool {
         item.files.allSatisfy { phoneFiles?[Self.phoneKey(deviceID: deviceID, $0)] != nil }
+    }
+
+    /// Record value for phone files the user deleted in the review before a direct import.
+    public static let deletedInReview = "deleted"
+    /// Record value for phone files the user chose not to import (not found in Photos to delete).
+    public static let skippedInReview = "skipped"
+
+    /// Remembers the phone files of `item` with a fixed value, such as `deletedInReview`, so later
+    /// direct imports leave them out.
+    public mutating func recordPhone(_ item: PhoneImportItem, deviceID: String, as value: String) {
+        var records = phoneFiles ?? [:]
+        for file in item.files { records[Self.phoneKey(deviceID: deviceID, file)] = value }
+        phoneFiles = records
     }
 
     /// Remembers the phone files of `item`. `sha256` is nil when the item was found in Photos
