@@ -56,6 +56,8 @@ final class BackupModel {
     private(set) var review: ReviewSession?
     private(set) var deletionReport: DeletionReport?
     @ObservationIgnored private var pendingDeletion: (items: [PhoneItem], requireBackup: Bool)?
+    /// "Delete first" in progress from the review list; Cancel stops it before anything is deleted.
+    @ObservationIgnored private var deletionTask: Task<Void, Never>?
     /// Show the largest videos and duplicates before backing up a phone.
     var reviewBeforeBackup: Bool {
         didSet { UserDefaults.standard.set(reviewBeforeBackup, forKey: Self.reviewKey) }
@@ -264,6 +266,8 @@ final class BackupModel {
     }
 
     func closeReview() {
+        deletionTask?.cancel()
+        deletionTask = nil
         review?.cancel()
         review = nil
     }
@@ -369,7 +373,7 @@ final class BackupModel {
         let backupDirectory = plan?.backupDirectory
         let destination = destinationURL
         review.beginDeletion()
-        Task {
+        deletionTask = Task {
             let result = await deleteThroughPhotos(items, requireBackup: false,
                                                    backupDirectory: backupDirectory, destination: destination)
             let removed = Set(result.deletedPaths)
@@ -397,11 +401,14 @@ final class BackupModel {
                 candidates = split.safe
                 result.notBackedUp = split.missing.map(\.relativePath)
             }
-            let index = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryIndex() }.value
+            let lookup = candidates.map { (path: $0.relativePath, filename: $0.filename, date: $0.date) }
+            let finder = Task.detached(priority: .userInitiated) { try PhotoLibraryImporter.uniqueMatches(for: lookup) }
+            let found = try await withTaskCancellationHandler { try await finder.value } onCancel: { finder.cancel() }
+            try Task.checkCancellation() // the user can still stop here; nothing has been deleted yet
             var identifiers: [String] = []
             var matched: [PhoneItem] = []
             for item in candidates {
-                if let id = index.uniqueMatch(filename: item.filename, date: item.date) {
+                if let id = found[item.relativePath] {
                     identifiers.append(id)
                     matched.append(item)
                 } else {

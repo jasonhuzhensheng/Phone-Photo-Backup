@@ -39,6 +39,34 @@ enum PhotoLibraryImporter {
         return index
     }
 
+    /// For each item, the identifier of the one library item with the same file name stem and a
+    /// capture time within two seconds (no time-zone shift), or nothing when there is none or more
+    /// than one. Only the few items around each time are looked at, so this stays fast in a large
+    /// library (reading the whole library index takes minutes there). Same rule as
+    /// `LibraryIndex.uniqueMatch`.
+    static func uniqueMatches(for items: [(path: String, filename: String, date: Date?)]) throws -> [String: String] {
+        var result: [String: String] = [:]
+        for item in items {
+            try Task.checkCancellation()
+            guard let date = item.date else { continue }
+            let options = PHFetchOptions()
+            options.includeHiddenAssets = true
+            options.predicate = NSPredicate(format: "creationDate >= %@ AND creationDate <= %@",
+                                            date.addingTimeInterval(-2) as NSDate, date.addingTimeInterval(2) as NSDate)
+            let stem = LibraryIndex.stem(item.filename)
+            var found: [String] = []
+            PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in
+                let resources = PHAssetResource.assetResources(for: asset)
+                let primary = resources.first { $0.type == .photo || $0.type == .video } ?? resources.first
+                if let name = primary?.originalFilename, LibraryIndex.stem(name) == stem {
+                    found.append(asset.localIdentifier)
+                }
+            }
+            if found.count == 1 { result[item.path] = found[0] }
+        }
+        return result
+    }
+
     /// Moves library items to Recently Deleted (recoverable for 30 days). With iCloud Photos on,
     /// the deletion syncs to the iPhone, where the items also go to Recently Deleted. macOS asks the
     /// user to confirm. Returns how many items were deleted.

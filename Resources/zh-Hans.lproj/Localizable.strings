@@ -193,3 +193,4 @@
 "Delete the selected items first?" = "先删除所选项目？";
 "Delete, Then Back Up" = "先删除，再备份";
 "%@ items (%@) are moved to Recently Deleted in Photos now and are not backed up; %@ of them already have a backup copy from an earlier backup. They can be recovered from Recently Deleted for 30 days. Then the rest of the phone is backed up. Items not found in Photos are left on the phone and backed up." = "%1$@ 项（%2$@）会现在移到“照片”的“最近删除”，不会备份；其中 %3$@ 项在以前的备份里已有副本。30 天内可以从“最近删除”恢复。之后备份手机上的其余内容。在“照片”里找不到的项目会留在手机上，并照常备份。";
+"Finding the selected items in Photos… Click Cancel to stop; nothing is deleted until macOS asks you to confirm." = "正在“照片”中查找所选项目…点“取消”可以停止；在 macOS 弹出确认之前不会删除任何东西。";

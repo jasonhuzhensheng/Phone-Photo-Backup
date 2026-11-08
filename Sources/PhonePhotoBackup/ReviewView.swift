@@ -193,7 +193,8 @@ struct ReviewSheet: View {
             if review.isDeleting {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Moving the selected items to Recently Deleted in Photos…").foregroundStyle(.secondary)
+                    Text("Finding the selected items in Photos… Click Cancel to stop; nothing is deleted until macOS asks you to confirm.")
+                        .foregroundStyle(.secondary)
                 }
             } else if let result = review.deletion {
                 DeletionSummary(result: result)
@@ -213,6 +214,7 @@ struct ReviewSheet: View {
                 Button("Cancel", role: .cancel) { model.closeReview() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
+                Group {
                 Button("Back Up Without Deleting") { model.finishReview(delete: false) }
                 Button("Delete Selected, Then Back Up…", role: .destructive) {
                     selectedBackedUp = model.plan.map { PhoneReview.backedUp(review.selectedItems, in: $0.backupDirectory).safe.count } ?? 0
@@ -223,8 +225,9 @@ struct ReviewSheet: View {
                 Button("Back Up, Then Delete Selected") { confirmingDelete = true }
                     .keyboardShortcut(.defaultAction)
                     .disabled(review.selected.isEmpty)
+                }
+                .disabled(review.isDeleting) // Cancel stays available to stop a deletion
             }
-            .disabled(review.isDeleting)
         }
         .padding(20)
         .frame(minWidth: 760, idealWidth: 860, minHeight: 640)

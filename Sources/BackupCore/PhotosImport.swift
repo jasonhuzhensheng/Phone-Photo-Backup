@@ -228,7 +228,7 @@ public struct LibraryIndex: Sendable {
         return offHour <= 2 || offHour >= 3600 - 2
     }
 
-    static func stem(_ filename: String) -> String {
+    public static func stem(_ filename: String) -> String {
         (filename as NSString).deletingPathExtension.lowercased()
     }
 }
