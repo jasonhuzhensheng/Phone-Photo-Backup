@@ -25,7 +25,7 @@ struct ContentView: View {
             actions
         }
         .padding(24)
-        .frame(minWidth: 620, idealWidth: 680, minHeight: 500)
+        .frame(minWidth: 620, idealWidth: 680, minHeight: 540)
         .alert("Backup error", isPresented: Binding(get: { model.alertMessage != nil },
                                                    set: { if !$0 { model.alertMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -43,6 +43,14 @@ struct ContentView: View {
                 } else {
                     Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted.")
                 }
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { model.review != nil },
+            set: { if !$0 { model.closeReview() } }
+        )) {
+            if let review = model.review {
+                ReviewSheet(review: review).environment(model)
             }
         }
         .confirmationDialog("Import into Photos?", isPresented: Binding(
@@ -63,7 +71,8 @@ struct ContentView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Toggle("Import into Photos after each backup (iCloud Photos then syncs them to your other devices)",
                    isOn: $model.importToPhotos)
-            Toggle("Start automatically when a phone is connected", isOn: $model.autoStart)
+            Toggle("Before backing up a phone, list the largest videos and duplicates to delete", isOn: $model.reviewBeforeBackup)
+            Toggle("Start automatically when a phone is connected (skips the list)", isOn: $model.autoStart)
         }
         .toggleStyle(.checkbox)
         .disabled(model.isBusy)
@@ -312,11 +321,17 @@ private struct StatusPanel: View {
                     if let plan = model.plan { PlanSummary(plan: plan) }
                 case .backingUp:
                     progress
+                case .deleting:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Moving the selected items to Recently Deleted in Photos…")
+                    }
                 case .importing:
                     importProgress
                 case .finished:
                     VStack(alignment: .leading, spacing: 14) {
                         if let report = model.report { ReportSummary(report: report) }
+                        if let deletion = model.deletionReport { DeletionSummary(result: deletion) }
                         if let result = model.importReport { ImportSummary(result: result) }
                         if model.autoStart, case .device = model.source {
                             Label("Done. You can unplug this phone and connect the next one.", systemImage: "arrow.triangle.2.circlepath")
@@ -430,6 +445,44 @@ private struct PlanSummary: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
+            }
+        }
+    }
+}
+
+private struct DeletionSummary: View {
+    @State private var showDetails = false
+    let result: BackupModel.DeletionReport
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("\(result.deleted.formatted()) of \(result.requested.formatted()) selected items moved to Recently Deleted in Photos")
+                    .font(.headline)
+            } icon: {
+                Image(systemName: "trash").foregroundStyle(result.deleted == result.requested ? .green : .orange)
+            }
+            if let error = result.error {
+                Text(verbatim: error).font(.callout).foregroundStyle(.red)
+            }
+            if !result.notBackedUp.isEmpty || !result.notInPhotos.isEmpty {
+                DisclosureGroup("Show items that were not deleted", isExpanded: $showDetails) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            if !result.notBackedUp.isEmpty {
+                                Text("No verified backup copy:").font(.caption.weight(.semibold))
+                                Text(verbatim: result.notBackedUp.joined(separator: "\n")).font(.caption.monospaced())
+                            }
+                            if !result.notInPhotos.isEmpty {
+                                Text("Not found in Photos (delete these on the phone yourself):").font(.caption.weight(.semibold))
+                                Text(verbatim: result.notInPhotos.joined(separator: "\n")).font(.caption.monospaced())
+                            }
+                        }
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 120)
+                }
             }
         }
     }

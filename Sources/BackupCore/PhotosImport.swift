@@ -45,7 +45,8 @@ public struct ImportLedger: Codable, Sendable {
         /// Photos `localIdentifier` of the asset, when this app created it.
         public var assetID: String?
         public var importedAt: String
-        /// "imported" when this app added it, "existing" when it was already in Photos.
+        /// "imported" when this app added it, "existing" when it was already in Photos,
+        /// "deleted" when the user deleted it from Photos in the review step.
         public var how: String
 
         enum CodingKeys: String, CodingKey {
@@ -72,6 +73,11 @@ public struct ImportLedger: Codable, Sendable {
         for file in item.files {
             files[file.sha256] = Entry(assetID: assetID, importedAt: now, how: existing ? "existing" : "imported")
         }
+    }
+
+    /// Records files the user deleted from Photos, so a later import does not bring them back.
+    public mutating func markDeleted(_ sha256: String) {
+        files[sha256] = Entry(assetID: nil, importedAt: Manifest.timestamp(), how: "deleted")
     }
 
     public static func load(from destination: URL) throws -> ImportLedger {
@@ -180,14 +186,19 @@ public enum PhotosImport {
 /// Recognises photos that are already in the Photos library (for example taken on the new phone
 /// and synced through iCloud) by file name and capture time.
 public struct LibraryIndex: Sendable {
-    private var datesByStem: [String: [Date]] = [:]
+    private struct Entry: Sendable {
+        let date: Date
+        let id: String?
+    }
+
+    private var entriesByStem: [String: [Entry]] = [:]
     public private(set) var count = 0
 
     public init() {}
 
-    public mutating func add(filename: String, date: Date?) {
+    public mutating func add(filename: String, date: Date?, id: String? = nil) {
         guard let date else { return }
-        datesByStem[Self.stem(filename), default: []].append(date)
+        entriesByStem[Self.stem(filename), default: []].append(Entry(date: date, id: id))
         count += 1
     }
 
@@ -196,8 +207,18 @@ public struct LibraryIndex: Sendable {
     /// metadata often has no time zone). Without a date nothing matches, so a photo is imported
     /// rather than wrongly skipped.
     public func contains(filename: String, date: Date?) -> Bool {
-        guard let date, let dates = datesByStem[Self.stem(filename)] else { return false }
-        return dates.contains { Self.sameMoment(date, $0) }
+        guard let date, let entries = entriesByStem[Self.stem(filename)] else { return false }
+        return entries.contains { Self.sameMoment(date, $0.date) }
+    }
+
+    /// The identifier of the one library item with the same name stem and a time within two
+    /// seconds (no time-zone allowance). Nil when there is none or more than one, so deleting
+    /// never guesses.
+    public func uniqueMatch(filename: String, date: Date?) -> String? {
+        guard let date, let entries = entriesByStem[Self.stem(filename)] else { return nil }
+        let matches = entries.filter { abs($0.date.timeIntervalSince(date)) <= 2 }
+        guard matches.count == 1 else { return nil }
+        return matches[0].id
     }
 
     static func sameMoment(_ a: Date, _ b: Date) -> Bool {

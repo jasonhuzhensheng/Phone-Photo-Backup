@@ -6,7 +6,17 @@ import Observation
 @MainActor @Observable
 final class BackupModel {
     enum Phase: Equatable {
-        case idle, scanning, ready, backingUp, importing, finished
+        case idle, scanning, ready, backingUp, deleting, importing, finished
+    }
+
+    struct DeletionReport {
+        var requested = 0
+        var deleted = 0
+        /// Selected, but without a verified backup copy, so not deleted.
+        var notBackedUp: [String] = []
+        /// Selected, but not matched to exactly one item in Photos, so not deleted.
+        var notInPhotos: [String] = []
+        var error: String?
     }
 
     enum ImportStage: Equatable {
@@ -40,6 +50,15 @@ final class BackupModel {
     var alertMessage: String?
     var confirmingStart = false
 
+    // Review before backup and deleting through Photos
+    private(set) var review: ReviewSession?
+    private(set) var deletionReport: DeletionReport?
+    @ObservationIgnored private var pendingDeletion: (items: [PhoneItem], requireBackup: Bool)?
+    /// Show the largest videos and duplicates before backing up a phone.
+    var reviewBeforeBackup: Bool {
+        didSet { UserDefaults.standard.set(reviewBeforeBackup, forKey: Self.reviewKey) }
+    }
+
     // Importing into Photos
     private(set) var importStage = ImportStage.preparing
     private(set) var importDone = 0
@@ -69,6 +88,7 @@ final class BackupModel {
     private var task: Task<Void, Never>?
     private static let sourceKey = "sourcePath", destinationKey = "destinationPath"
     private static let importKey = "importToPhotos", autoStartKey = "autoStartOnConnect"
+    private static let reviewKey = "reviewBeforeBackup"
 
     init() {
         let defaults = UserDefaults.standard
@@ -76,6 +96,7 @@ final class BackupModel {
         destinationURL = Self.existingFolder(defaults.string(forKey: Self.destinationKey))
         importToPhotos = defaults.bool(forKey: Self.importKey)
         autoStart = defaults.bool(forKey: Self.autoStartKey)
+        reviewBeforeBackup = defaults.object(forKey: Self.reviewKey) as? Bool ?? true
         devices.onDeviceAdded = { [weak self] id in self?.deviceConnected(id) }
         devices.onDeviceRemoved = { [weak self] id in self?.deviceDisconnected(id) }
         if !isSelfCheck {
@@ -91,7 +112,7 @@ final class BackupModel {
         if case .device(let id) = source { devices.device(id) } else { nil }
     }
 
-    var isBusy: Bool { phase == .scanning || phase == .backingUp || phase == .importing }
+    var isBusy: Bool { phase == .scanning || phase == .backingUp || phase == .deleting || phase == .importing }
     var canScan: Bool { !isBusy && source != nil && destinationURL != nil }
     var canImport: Bool { !isBusy && destinationURL != nil }
     private var importsAfterBackup: Bool { importToPhotos && !isSelfCheck }
@@ -182,6 +203,7 @@ final class BackupModel {
         plan = nil
         report = nil
         importReport = nil
+        deletionReport = nil
         phase = .idle
     }
 
@@ -192,6 +214,7 @@ final class BackupModel {
         plan = nil
         report = nil
         importReport = nil
+        deletionReport = nil
         phase = .scanning
         task = Task {
             let result: Result<BackupPlan, Error>
@@ -225,8 +248,38 @@ final class BackupModel {
         }
     }
 
+    /// For a phone, opens the review of large videos and duplicates first (when turned on);
+    /// otherwise asks to confirm the backup.
     func requestStart() {
-        if canStart { confirmingStart = true }
+        guard canStart else { return }
+        if reviewBeforeBackup, !isSelfCheck, case .device(let id) = source {
+            let session = ReviewSession(deviceID: id)
+            review = session
+            session.start(devices: devices)
+        } else {
+            confirmingStart = true
+        }
+    }
+
+    func closeReview() {
+        review?.cancel()
+        review = nil
+    }
+
+    /// Ends the review and starts the backup. With `delete`, the selected items are deleted
+    /// through Photos once the backup has finished (or are left out of the backup, if chosen).
+    func finishReview(delete: Bool) {
+        guard let review, let plan else { return }
+        review.cancel()
+        self.review = nil
+        pendingDeletion = nil
+        if delete, !review.selected.isEmpty {
+            pendingDeletion = (review.selectedItems, review.backUpSelected)
+            if !review.backUpSelected {
+                self.plan = plan.excluding(review.selected)
+            }
+        }
+        startBackup()
     }
 
     func startBackup() {
@@ -237,6 +290,7 @@ final class BackupModel {
         currentFile = ""
         report = nil
         importReport = nil
+        deletionReport = nil
 
         task = Task {
             // Keep the Mac awake while copying.
@@ -271,6 +325,12 @@ final class BackupModel {
             switch result {
             case .success(let report):
                 self.report = report
+                if let pending = self.pendingDeletion, !report.cancelled, let destination = self.destinationURL {
+                    self.pendingDeletion = nil
+                    await self.performDeletion(pending.items, requireBackup: pending.requireBackup,
+                                               backupDirectory: report.backupDirectory, destination: destination)
+                }
+                self.pendingDeletion = nil
                 if self.importsAfterBackup, !report.cancelled, let destination = self.destinationURL {
                     await self.performImport(folders: [report.backupDirectory], destination: destination, confirm: false)
                 } else {
@@ -278,10 +338,54 @@ final class BackupModel {
                     self.announceFinished()
                 }
             case .failure(let error):
+                self.pendingDeletion = nil
                 self.phase = .ready
                 self.alertMessage = error.localizedDescription
             }
         }
+    }
+
+    // MARK: Deleting through Photos
+
+    /// Moves the selected items to Recently Deleted in Photos (recoverable for 30 days); iCloud
+    /// Photos then removes them from the phone. With `requireBackup`, only items whose backup copy
+    /// is verified are deleted. Items are matched to Photos by name and capture time; anything
+    /// without exactly one match is left alone.
+    private func performDeletion(_ items: [PhoneItem], requireBackup: Bool, backupDirectory: URL, destination: URL) async {
+        phase = .deleting
+        var result = DeletionReport(requested: items.count)
+        do {
+            try await PhotoLibraryImporter.authorize()
+            var candidates = items
+            if requireBackup {
+                let split = PhoneReview.backedUp(items, in: backupDirectory)
+                candidates = split.safe
+                result.notBackedUp = split.missing.map(\.relativePath)
+            }
+            let index = await Task.detached(priority: .userInitiated) { PhotoLibraryImporter.libraryIndex() }.value
+            var identifiers: [String] = []
+            var matched: [PhoneItem] = []
+            for item in candidates {
+                if let id = index.uniqueMatch(filename: item.filename, date: item.date) {
+                    identifiers.append(id)
+                    matched.append(item)
+                } else {
+                    result.notInPhotos.append(item.relativePath)
+                }
+            }
+            if !identifiers.isEmpty {
+                result.deleted = try await PhotoLibraryImporter.moveToRecentlyDeleted(identifiers)
+                // Keep a later import from putting them back into Photos.
+                var ledger = try ImportLedger.load(from: destination)
+                for sha in PhoneReview.backupHashes(of: matched, in: backupDirectory).values {
+                    ledger.markDeleted(sha)
+                }
+                try ledger.write(to: destination)
+            }
+        } catch {
+            result.error = error.localizedDescription
+        }
+        deletionReport = result
     }
 
     // MARK: Importing into Photos

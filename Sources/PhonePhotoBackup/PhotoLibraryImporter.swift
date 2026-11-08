@@ -33,10 +33,22 @@ enum PhotoLibraryImporter {
             let resources = PHAssetResource.assetResources(for: asset)
             let primary = resources.first { $0.type == .photo || $0.type == .video } ?? resources.first
             if let name = primary?.originalFilename {
-                index.add(filename: name, date: asset.creationDate)
+                index.add(filename: name, date: asset.creationDate, id: asset.localIdentifier)
             }
         }
         return index
+    }
+
+    /// Moves library items to Recently Deleted (recoverable for 30 days). With iCloud Photos on,
+    /// the deletion syncs to the iPhone, where the items also go to Recently Deleted. macOS asks the
+    /// user to confirm. Returns how many items were deleted.
+    static func moveToRecentlyDeleted(_ identifiers: [String]) async throws -> Int {
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
+        guard assets.count > 0 else { return 0 }
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetChangeRequest.deleteAssets(assets)
+        }
+        return assets.count
     }
 
     /// When the photo or video was taken, from its metadata; the file date if there is none.

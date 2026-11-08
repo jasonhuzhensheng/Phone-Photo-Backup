@@ -72,6 +72,15 @@ final class ImportFixture {
         #expect(second.items[0].primary.filename != first.items[0].primary.filename)
     }
 
+    @Test func deletedFilesAreNotImportedAgain() throws {
+        let f = try ImportFixture()
+        try f.backup("Phone", ["DCIM/IMG_0001.HEIC": "keep", "DCIM/IMG_0002.MOV": "huge video"])
+        var ledger = ImportLedger()
+        let video = try #require(try f.plan().items.first { $0.video != nil })
+        ledger.markDeleted(video.video!.sha256)
+        #expect(try f.plan(ledger).items.map(\.primary.filename) == ["IMG_0001.HEIC"])
+    }
+
     @Test func missingBackupCopiesAreLeftOut() throws {
         let f = try ImportFixture()
         let folder = try f.backup("Phone", ["DCIM/IMG_0001.HEIC": "a", "DCIM/IMG_0002.HEIC": "b"])
@@ -90,5 +99,17 @@ final class ImportFixture {
         #expect(!index.contains(filename: "IMG_1234.HEIC", date: taken.addingTimeInterval(400 * 86400))) // counter wrapped
         #expect(!index.contains(filename: "IMG_9999.HEIC", date: taken))
         #expect(!index.contains(filename: "IMG_1234.HEIC", date: nil))
+    }
+
+    @Test func deletionMatchIsStrictAndUnique() {
+        var index = LibraryIndex()
+        let taken = Date(timeIntervalSince1970: 1_700_000_000)
+        index.add(filename: "IMG_0001.HEIC", date: taken, id: "asset-1")
+        index.add(filename: "IMG_0002.HEIC", date: taken, id: "asset-2")
+        index.add(filename: "IMG_0002.JPG", date: taken.addingTimeInterval(1), id: "asset-3")
+        #expect(index.uniqueMatch(filename: "IMG_0001.HEIC", date: taken.addingTimeInterval(1)) == "asset-1")
+        #expect(index.uniqueMatch(filename: "IMG_0001.HEIC", date: taken.addingTimeInterval(3600)) == nil) // no time-zone guessing
+        #expect(index.uniqueMatch(filename: "IMG_0002.HEIC", date: taken) == nil) // ambiguous
+        #expect(index.uniqueMatch(filename: "IMG_0001.HEIC", date: nil) == nil)
     }
 }

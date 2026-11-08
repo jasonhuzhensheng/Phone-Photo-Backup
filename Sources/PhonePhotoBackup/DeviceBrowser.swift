@@ -1,5 +1,6 @@
 import AppKit
 import BackupCore
+import CryptoKit
 @preconcurrency import ImageCaptureCore
 import Observation
 import os
@@ -121,6 +122,41 @@ final class DeviceBrowser: NSObject {
         visit(camera.contents, [])
         catalogs[id] = byPath
         return (camera.name ?? String(localized: "Phone"), files)
+    }
+
+    // MARK: Review: hashing and thumbnails
+
+    /// Every file in the last catalog, with its date and (for videos) length.
+    func items(of id: String) -> [PhoneItem] {
+        (catalogs[id] ?? [:]).map { path, file in
+            PhoneItem(relativePath: path, size: Int64(file.fileSize), date: file.creationDate,
+                      duration: file.duration > 0 ? file.duration : nil)
+        }
+    }
+
+    /// SHA-256 of a file on the phone, read in chunks without saving it to disk.
+    func sha256(deviceID: String, path: String) async throws -> String {
+        let file = try await availableFile(deviceID: deviceID, path: path)
+        let size = Int64(file.fileSize)
+        var hasher = StreamingSHA256()
+        var offset: Int64 = 0
+        let chunk: Int64 = 8 << 20
+        while offset < size {
+            try Task.checkCancellation()
+            let length = min(chunk, size - offset)
+            let data = try await file.requestReadData(atOffset: off_t(offset), length: off_t(length))
+            guard !data.isEmpty else { throw BackupError(.downloadIncomplete) }
+            hasher.update(data)
+            offset += Int64(data.count)
+        }
+        return hasher.finalize()
+    }
+
+    /// A small preview image of a file on the phone.
+    func thumbnail(deviceID: String, path: String) async -> NSImage? {
+        guard let file = catalogs[deviceID]?[path],
+              let data = try? await file.requestThumbnailData(options: nil) else { return nil }
+        return NSImage(data: data)
     }
 
     // MARK: Downloading
@@ -308,6 +344,13 @@ final class DeviceBrowser: NSObject {
     private func renamed(_ device: ICDevice) {
         update(Self.identifier(device)) { $0.name = device.name ?? $0.name }
     }
+}
+
+/// Incremental SHA-256 for data read from the phone in pieces.
+struct StreamingSHA256 {
+    private var hasher = CryptoKit.SHA256()
+    mutating func update(_ data: Data) { hasher.update(data: data) }
+    func finalize() -> String { hasher.finalize().map { String(format: "%02x", $0) }.joined() }
 }
 
 private struct FailedError: LocalizedError {

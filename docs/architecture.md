@@ -11,10 +11,12 @@
 | `Sources/BackupCore/BackupEngine.swift` | 路径校验、递归扫描、复制、SHA-256 校验、冲突版本处理、进度与取消 | 只写用户选定的目标目录；不修改或删除来源文件；不依赖界面 |
 | `Sources/BackupCore/StagedBackup.swift` | 设备来源的备份：设备计划、设备路径清理、逐个取回文件到备份目录内的暂存区、核对大小、fsync、SHA-256、排他发布；已备份且大小一致的文件不再从设备读取 | 通过注入的 `Fetch` 闭包取文件，不依赖 ImageCaptureCore；暂存区 `.phone-photo-backup-staging` 用完即删 |
 | `Sources/BackupCore/PhotosImport.swift` | 导入「照片」的计划：读取各备份清单，按 SHA-256 跨备份去重，排除导入记录中已有的文件，配对实况照片（同目录同名的照片 + `.mov`）；导入记录 `.phone-photo-backup-photos.json`；按文件名主干 + 拍摄时间（容许 ±14 小时整点时区偏差、2 秒误差）识别图库中已有的照片 | 纯文件逻辑，不依赖 PhotoKit |
+| `Sources/BackupCore/PhoneReview.swift` | 备份前检查：最大的视频、完全相同的重复项（先按大小筛选候选，再由注入的哈希函数确认）、删除前核对备份（清单中同大小版本且副本存在）、取得备份副本的 SHA-256 | 纯逻辑，不删除任何东西 |
 | `Sources/BackupCore/Manifest.swift` | 读写 `.phone-photo-backup.json`（schema 1，与旧 Python 版兼容） | 原子写入；无法读取或不匹配时在复制前中止 |
 | `Sources/BackupCore/FileSystem.swift` | POSIX 辅助：`lstat`、排他创建、排他发布、元数据复制 | 不跟随符号链接 |
 | `Sources/PhonePhotoBackup/DeviceBrowser.swift` | ImageCaptureCore：发现 USB 设备、打开会话、读取完整文件列表（含 Live Photo 视频等附属文件）、下载单个文件；手机锁定或断开时等待恢复并重读列表 | 只读设备；不删除、不上传 |
 | `Sources/PhonePhotoBackup/PhotoLibraryImporter.swift` | PhotoKit：申请读写权限、读取图库已有项目的文件名与创建时间、读取备份文件的拍摄时间（EXIF/视频元数据，缺失时用文件时间）、创建照片/视频/实况照片并加入“从旧手机导入”相簿；实况照片配对失败时分开导入 | 只添加，不修改或删除图库中已有项目；`shouldMoveFile = false`，备份文件保持不动 |
+| `Sources/PhonePhotoBackup/ReviewView.swift` | 检查清单窗口：`ReviewSession` 计算大视频和重复项（从手机分块读取计算 SHA-256）、缩略图、勾选；默认勾选重复组中除最早一份外的副本 | 只做选择；删除由模型在备份后经「照片」执行 |
 | `Sources/PhonePhotoBackup/BackupModel.swift` | `@MainActor @Observable` 状态：来源（文件夹或设备）选择与记忆、新接入的手机自动设为来源、自动模式（接入即扫描 → 备份 → 导入，每台手机每次启动只自动运行一次）、扫描/备份/导入任务、进度、取消、防休眠 | 在后台任务中调用引擎 |
 | `Sources/PhonePhotoBackup/ContentView.swift` | SwiftUI 界面：来源行（菜单列出已连接手机或选择文件夹，支持拖放）、手机状态、状态面板、确认对话框、结果与错误列表 | 不含文件操作逻辑 |
 | `Sources/PhonePhotoBackup/PhonePhotoBackupApp.swift` | 应用入口、单窗口、菜单与快捷键 | — |
@@ -27,6 +29,8 @@
 设备来源流程：发现设备 → 打开会话（iPhone 会提示“信任此电脑”）→ 等待完整文件列表 → 按设备上的文件夹结构生成相对路径和计划（备份目录为 `<设备名>_backup`）→ 用户确认 → 对每个文件：若清单中已有相同大小的版本且备份副本仍在则跳过，否则下载到暂存区 → 核对大小与设备报告一致 → fsync → SHA-256 → 与文件夹来源相同的跳过/冲突规则 → 排他发布（同卷重命名）→ 最后原子更新清单。手机锁定或断开时下载在原地等待，恢复后重新读取文件列表并继续；用户可随时停止。
 
 设备备份文件夹归属：文件夹内的 `.phone-photo-backup-device` 记录设备编号。同名手机或同名的文件夹备份已占用 `<名称>_backup` 时，依次改用 `<名称> 2_backup`、`<名称> 3_backup`。
+
+删除流程：手机来源点“开始备份”时先打开检查清单 → 用户勾选 → 备份（选择不备份所选项目时把它们从计划中去掉）→ 需要备份时只保留经核对的项目 → 读取图库索引，按文件名主干 + 拍摄时间（2 秒内、唯一匹配，不容许时区偏差）找到对应项目 → `PHAssetChangeRequest.deleteAssets` 移到“最近删除”（macOS 会请求确认）→ 把已删项目的 SHA-256 以 `deleted` 写入导入记录，防止导入步骤把它们放回。应用从不直接删除手机上的文件。
 
 导入「照片」流程：取得权限 → 读取导入记录 → 规划（跨备份去重、排除已导入、配对实况照片）→ 手动导入时先确认数量 → 读取图库索引 → 对每项：读取拍摄时间，图库里已有同名同时刻的项目则记为“已在照片中”，否则创建资源并加入相簿 → 每 25 项保存一次导入记录 → 结束时保存。用户可随时停止，再次运行会跳过已记录的文件。
 

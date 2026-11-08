@@ -87,7 +87,6 @@
 "Import" = "导入";
 "Up to %@ photos and videos (%@) will be added to Photos, in the album “%@”. Items already in Photos are skipped. With iCloud Photos turned on, they sync to your other devices." = "最多将有 %1$@ 项照片和视频（%2$@）添加到“照片”的“%3$@”相簿。已在“照片”里的会跳过。如果打开了 iCloud 照片，它们会同步到你的其他设备。";
 "Import into Photos after each backup (iCloud Photos then syncs them to your other devices)" = "每次备份后导入到“照片”（再由 iCloud 照片同步到你的其他设备）";
-"Start automatically when a phone is connected" = "接入手机后自动开始";
 "Import into Photos" = "导入“照片”";
 "Add all backups in the backup location to Photos, skipping duplicates" = "把备份位置里的所有备份导入“照片”，跳过重复项";
 "Import All Backups into Photos…" = "把所有备份导入“照片”…";
@@ -102,3 +101,29 @@
 "Imported into Photos" = "已导入“照片”";
 "Import finished with errors" = "导入完成，但有错误";
 "Backups stay on this Mac. Photos syncs imports through your own iCloud Photos." = "备份留在这台 Mac 上；导入“照片”的内容由你自己的 iCloud 照片同步。";
+
+/* Review before backup */
+"Review before backup" = "备份前检查";
+"Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too." = "选择要删除的项目。备份完成后，所选项目会在“照片”中删除并进入“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
+"No videos larger than 50 MB." = "没有大于 50 MB 的视频。";
+"Largest videos" = "最占空间的视频";
+"Looking for duplicates… %@ of %@" = "正在查找重复项… %1$@ / %2$@";
+"No duplicates found." = "没有找到重复项。";
+"Oldest copy" = "最早的一份";
+"Every copy in this group is selected." = "这一组的所有副本都被选中了。";
+"Exact duplicates" = "完全相同的重复项";
+"Also back up the selected items (recommended)" = "所选项目也备份一份（推荐）";
+"Selected: %@ items, %@" = "已选：%1$@ 项，%2$@";
+"Back Up Without Deleting" = "只备份，不删除";
+"Back Up, Then Delete Selected" = "备份，然后删除所选";
+"Delete the selected items?" = "删除所选项目？";
+"Back Up, Then Delete" = "备份后删除";
+"%@ items (%@) will be backed up first. Only items with a verified backup copy are then moved to Recently Deleted in Photos. Items not found in Photos are left alone." = "%1$@ 项（%2$@）会先备份。只有备份经核对无误的项目，才会在“照片”中移到“最近删除”。在“照片”里找不到的项目不会被删除。";
+"%@ items (%@) will NOT be backed up. They are moved to Recently Deleted in Photos and can be recovered there for 30 days only. Items not found in Photos are left alone." = "%1$@ 项（%2$@）不会备份。它们会在“照片”中移到“最近删除”，只能在 30 天内从那里恢复。在“照片”里找不到的项目不会被删除。";
+"Before backing up a phone, list the largest videos and duplicates to delete" = "备份手机前，列出最占空间的视频和重复项，选择要删除的";
+"Start automatically when a phone is connected (skips the list)" = "接入手机后自动开始（不显示检查清单）";
+"Moving the selected items to Recently Deleted in Photos…" = "正在把所选项目移到“照片”的“最近删除”…";
+"%@ of %@ selected items moved to Recently Deleted in Photos" = "已将所选 %2$@ 项中的 %1$@ 项移到“照片”的“最近删除”";
+"Show items that were not deleted" = "显示未删除的项目";
+"No verified backup copy:" = "没有经核对的备份：";
+"Not found in Photos (delete these on the phone yourself):" = "在“照片”里找不到（请在手机上自行删除）：";

@@ -66,6 +66,15 @@ public struct BackupPlan: Sendable {
     public let backupDirectory: URL
     public let files: [PlannedFile]
     public let totalBytes: Int64
+
+    /// The same plan without the files at `paths`.
+    public func excluding(_ paths: Set<String>) -> BackupPlan {
+        let kept = files.filter { !paths.contains($0.relativePath) }
+        var plan = BackupPlan(sourceName: sourceName, sourceDirectory: sourceDirectory, backupDirectory: backupDirectory,
+                              files: kept, totalBytes: kept.reduce(0) { $0 + $1.size })
+        plan.deviceID = deviceID
+        return plan
+    }
 }
 
 public enum FileOutcome: String, Sendable {

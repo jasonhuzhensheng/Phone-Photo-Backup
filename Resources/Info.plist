@@ -24,9 +24,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.2.0</string>
+	<string>2.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>3</string>
+	<string>4</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
@@ -34,7 +34,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Imports your backed-up photos and videos into Photos, and checks which ones are already there so nothing is added twice.</string>
+	<string>Imports your backed-up photos and videos into Photos, and checks which ones are already there so nothing is added twice. Items you choose to delete are moved to Recently Deleted.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Local-first photo backup. No cloud upload.</string>
 </dict>
