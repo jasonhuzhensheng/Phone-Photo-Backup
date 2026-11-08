@@ -50,7 +50,11 @@ final class DeviceBrowser: NSObject {
     @ObservationIgnored private let browser = ICDeviceBrowser()
     @ObservationIgnored private var cameras: [String: ICCameraDevice] = [:]
     /// Relative path → file, filled by `catalog(of:)` and used by `download`.
-    @ObservationIgnored private var catalogs: [String: [String: ICCameraFile]] = [:]
+    /// For each path, every file object the device lists for it, newest first. After a session
+    /// restart a camera can list the same file again next to the old, no longer usable object.
+    @ObservationIgnored private var catalogs: [String: [String: [ICCameraFile]]] = [:]
+    /// "name|size" → paths in the current file list, to find files whose folder name changed.
+    @ObservationIgnored private var pathsByNameSize: [String: [String: [String]]] = [:]
     /// Devices with a session request in flight.
     @ObservationIgnored private var opening: Set<String> = []
     /// Background loop that keeps sessions healthy (see `superviseSessions`).
@@ -101,7 +105,21 @@ final class DeviceBrowser: NSObject {
                 continue
             case .reading(let count):
                 if let last = progress[id], last.count == count {
-                    if now.timeIntervalSince(last.since) > 45, camera.hasOpenSession {
+                    let stable = now.timeIntervalSince(last.since)
+                    if catalogComplete.contains(id), count > 0, stable >= 8 {
+                        Self.log.info("file list settled: \(count) files")
+                        progress[id] = nil
+                        update(id) { $0.state = .ready(count: count) }
+                        continue
+                    }
+                    if catalogComplete.contains(id), count == 0, stable > 15, camera.hasOpenSession {
+                        // An empty list right after (re)connecting is not real: read it again.
+                        Self.log.info("empty file list; restarting session")
+                        progress[id] = nil
+                        restartSession(camera)
+                        continue
+                    }
+                    if !catalogComplete.contains(id), stable > 45, camera.hasOpenSession {
                         Self.log.info("file list stalled; restarting session")
                         progress[id] = nil
                         restartSession(camera)
@@ -147,14 +165,17 @@ final class DeviceBrowser: NSObject {
     func catalog(of id: String) throws -> (name: String, files: [PlannedFile]) {
         guard let camera = cameras[id] else { throw DeviceError.disconnected }
         guard case .ready = device(id)?.state else { throw DeviceError.notReady }
-        var byPath: [String: ICCameraFile] = [:]
+        var byPath: [String: [ICCameraFile]] = [:]
         var files: [PlannedFile] = []
 
         func add(_ file: ICCameraFile, _ folders: [String]) {
             let path = BackupEngine.devicePath(folders + [file.name ?? "_"])
-            guard byPath[path] == nil else { return }
-            byPath[path] = file
-            files.append(PlannedFile(relativePath: path, size: Int64(file.fileSize)))
+            if byPath[path] == nil {
+                files.append(PlannedFile(relativePath: path, size: Int64(file.fileSize)))
+            }
+            if byPath[path]?.contains(where: { $0 === file }) != true {
+                byPath[path, default: []].insert(file, at: 0) // later entries are the fresher ones
+            }
         }
         func visit(_ items: [ICCameraItem]?, _ folders: [String]) {
             for item in items ?? [] {
@@ -171,6 +192,11 @@ final class DeviceBrowser: NSObject {
         }
         visit(camera.contents, [])
         catalogs[id] = byPath
+        var index: [String: [String]] = [:]
+        for file in files {
+            index["\((file.relativePath as NSString).lastPathComponent)|\(file.size)", default: []].append(file.relativePath)
+        }
+        pathsByNameSize[id] = index
         return (camera.name ?? String(localized: "Phone"), files)
     }
 
@@ -182,10 +208,11 @@ final class DeviceBrowser: NSObject {
     /// this waits until the phone is back and unlocked, rereads its file list and carries on.
     /// The wait ends only when the file arrives, the file is gone from the phone, or the task is
     /// cancelled (the Stop button).
-    func download(deviceID: String, path: String, into directory: URL) async throws -> URL {
+    func download(deviceID: String, path: String, size: Int64, into directory: URL) async throws -> URL {
         var failures = 0
+        var tried: [ICCameraFile] = []
         while true {
-            let file = try await availableFile(deviceID: deviceID, path: path)
+            let file = try await availableFile(deviceID: deviceID, path: path, size: size, avoiding: tried)
             do {
                 return try await requestDownload(file, path: path, into: directory)
             } catch is CancellationError {
@@ -193,10 +220,15 @@ final class DeviceBrowser: NSObject {
             } catch {
                 Self.log.error("download failed for \(path, privacy: .private): \(error.localizedDescription, privacy: .public)")
                 failures += 1
+                tried.append(file)
                 // Give the delegate callbacks a moment to report a lock or disconnect.
                 try await Task.sleep(for: .seconds(1.5))
-                if failures < 5, !isUsable(deviceID) { continue }
-                throw error
+                guard failures < 5 else { throw error }
+                if isUsable(deviceID) {
+                    // The object may be left over from an earlier session: read the file list
+                    // again and try another object for the same path.
+                    catalogs[deviceID] = nil
+                }
             }
         }
     }
@@ -209,12 +241,22 @@ final class DeviceBrowser: NSObject {
     }
 
     /// Waits until `path` can be downloaded from the device, rereading the file list if needed.
-    private func availableFile(deviceID id: String, path: String) async throws -> ICCameraFile {
+    private func availableFile(deviceID id: String, path: String, size: Int64,
+                               avoiding tried: [ICCameraFile] = []) async throws -> ICCameraFile {
         var waitingSince: Date?
         while true {
             if let camera = cameras[id], !camera.isAccessRestrictedAppleDevice, case .ready = device(id)?.state {
                 if catalogs[id] == nil { _ = try catalog(of: id) }
-                guard let file = catalogs[id]?[path] else { throw DeviceError.fileMissing }
+                var candidates = catalogs[id]?[path] ?? []
+                if candidates.isEmpty {
+                    // The phone may have moved the file to another folder (folder names shift
+                    // while a large library is listed): find it by name and size.
+                    let key = "\((path as NSString).lastPathComponent)|\(size)"
+                    candidates = (pathsByNameSize[id]?[key] ?? []).flatMap { catalogs[id]?[$0] ?? [] }
+                }
+                guard !candidates.isEmpty else { throw DeviceError.fileMissing }
+                // Prefer an object not tried yet; if all were tried, retry the freshest.
+                let file = candidates.first { candidate in !tried.contains { $0 === candidate } } ?? candidates[0]
                 if let waitingSince {
                     Self.log.info("device back after \(Date().timeIntervalSince(waitingSince), format: .fixed(precision: 1))s")
                 }
@@ -326,14 +368,22 @@ final class DeviceBrowser: NSObject {
     private func refresh(_ device: ICDevice, catalogComplete: Bool = false) {
         let id = Self.identifier(device)
         guard let camera = cameras[id] else { return }
-        let count = camera.mediaFiles?.count ?? 0
+        // Count each file once: after a session restart a camera may list files twice.
+        let count = Set((camera.mediaFiles ?? []).map { "\($0.parentFolder?.name ?? "")/\($0.name ?? "")" }).count
         update(id) { entry in
             if camera.isAccessRestrictedAppleDevice {
                 entry.state = .locked
             } else if catalogComplete {
-                entry.state = .ready(count: count)
-            } else if case .ready = entry.state {
-                entry.state = .ready(count: count)
+                // The "complete" callback comes long before an iPhone with a large library has
+                // listed everything (seen: 9,366 items at 0.5 s, 97,840 after 20 s), and folder
+                // names shift while it grows. superviseSessions marks it ready once it is stable.
+                entry.state = .reading(count: count)
+            } else if case .ready(let old) = entry.state {
+                if count != old {
+                    // The list changed: read it again once it has settled.
+                    catalogs[id] = nil
+                    entry.state = .reading(count: count)
+                }
             } else if camera.hasOpenSession {
                 entry.state = .reading(count: count)
             }
