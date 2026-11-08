@@ -1,5 +1,6 @@
 import AppKit
 import BackupCore
+import CryptoKit
 @preconcurrency import ImageCaptureCore
 import Observation
 import os
@@ -198,6 +199,52 @@ final class DeviceBrowser: NSObject {
         }
         pathsByNameSize[id] = index
         return (camera.name ?? String(localized: "Phone"), files)
+    }
+
+    // MARK: Review: hashing and thumbnails
+
+    /// Every file in the last catalog, with its date and (for videos) length.
+    func items(of id: String) -> [PhoneItem] {
+        (catalogs[id] ?? [:]).compactMap { path, files in
+            guard let file = files.first else { return nil }
+            return PhoneItem(relativePath: path, size: Int64(file.fileSize), date: file.creationDate,
+                      duration: file.duration > 0 ? file.duration : nil)
+        }
+    }
+
+    /// SHA-256 of a file on the phone, read in chunks without saving it to disk.
+    func sha256(deviceID: String, path: String, size expectedSize: Int64) async throws -> String {
+        let file = try await availableFile(deviceID: deviceID, path: path, size: expectedSize)
+        let size = Int64(file.fileSize)
+        var hasher = StreamingSHA256()
+        var offset: Int64 = 0
+        let chunk: Int64 = 8 << 20
+        while offset < size {
+            try Task.checkCancellation()
+            let length = min(chunk, size - offset)
+            let data = try await file.requestReadData(atOffset: off_t(offset), length: off_t(length))
+            guard !data.isEmpty else { throw BackupError(.downloadIncomplete) }
+            hasher.update(data)
+            offset += Int64(data.count)
+        }
+        return hasher.finalize()
+    }
+
+    /// A preview image of a file on the phone, at most `maxPixelSize` pixels wide or high.
+    func thumbnail(deviceID: String, path: String, maxPixelSize: Int = 480) async -> NSImage? {
+        guard let file = catalogs[deviceID]?[path]?.first,
+              let data = try? await file.requestThumbnailData(options: [.imageSourceThumbnailMaxPixelSize: maxPixelSize])
+        else { return nil }
+        return NSImage(data: data)
+    }
+
+    /// Reads part of a file on the phone, so a video can be previewed without downloading it.
+    /// Waits while the phone is locked or reconnecting, like a download.
+    func readData(deviceID: String, path: String, size: Int64, offset: Int64, length: Int) async throws -> Data {
+        let file = try await availableFile(deviceID: deviceID, path: path, size: size)
+        let data = try await file.requestReadData(atOffset: off_t(offset), length: off_t(length))
+        guard !data.isEmpty || length == 0 else { throw BackupError(.downloadIncomplete) }
+        return data
     }
 
     // MARK: Downloading
@@ -451,6 +498,13 @@ final class DeviceBrowser: NSObject {
     private func renamed(_ device: ICDevice) {
         update(Self.identifier(device)) { $0.name = device.name ?? $0.name }
     }
+}
+
+/// Incremental SHA-256 for data read from the phone in pieces.
+struct StreamingSHA256 {
+    private var hasher = CryptoKit.SHA256()
+    mutating func update(_ data: Data) { hasher.update(data: data) }
+    func finalize() -> String { hasher.finalize().map { String(format: "%02x", $0) }.joined() }
 }
 
 private struct FailedError: LocalizedError {

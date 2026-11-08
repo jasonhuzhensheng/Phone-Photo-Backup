@@ -19,7 +19,7 @@ import Testing
             "DCIM/101APPLE/IMG_9000.HEIC": Self.shared,                 // renamed, same bytes
             "DCIM/100APPLE/IMG_0003.HEIC": Data("only on phone B".utf8),
         ])
-        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone B", files: b.files, destination: a.destination)
+        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone B", deviceID: "device-B", files: b.files, destination: a.destination)
         return (a, b, plan)
     }
 
@@ -54,7 +54,7 @@ import Testing
         // Running again reads nothing new from phone B.
         let before = b.fetches("DCIM/101APPLE/IMG_9000.HEIC")
         let again = try await BackupEngine.runStaged(
-            BackupEngine.makeDevicePlan(deviceName: "Phone B", files: b.files, destination: a.destination), fetch: b.fetch)
+            BackupEngine.makeDevicePlan(deviceName: "Phone B", deviceID: "device-B", files: b.files, destination: a.destination), fetch: b.fetch)
         #expect(again.unchanged == 3)
         #expect(b.fetches("DCIM/101APPLE/IMG_9000.HEIC") == before)
     }
@@ -97,7 +97,7 @@ import Testing
         #expect(first.copied == 1)
         let moved = FakeDevice(["DCIM/201604_a/IMG_1951.JPG": Self.shared])
         let report = try await BackupEngine.runStaged(
-            BackupEngine.makeDevicePlan(deviceName: "Test iPhone", files: moved.files, destination: f.destination),
+            BackupEngine.makeDevicePlan(deviceName: "Test iPhone", deviceID: f.deviceID, files: moved.files, destination: f.destination),
             fetch: moved.fetch)
         #expect(report.copied == 0)
         #expect(report.unchanged == 1)
@@ -116,7 +116,7 @@ import Testing
         try FileManager.default.createDirectory(at: reference, withIntermediateDirectories: true)
         try Self.shared.write(to: reference.appendingPathComponent("IMG_0001.HEIC"))
         try Self.shared.write(to: reference.appendingPathComponent("copy of photo.heic"))
-        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone C", files: f.device.files, destination: f.destination,
+        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone C", deviceID: "device-C", files: f.device.files, destination: f.destination,
                                                references: [f.root.appendingPathComponent("Old phone export")])
         #expect(plan.existing.folders == ["Old phone export"])
         #expect(plan.likelyDuplicates.count == 1)
@@ -136,7 +136,7 @@ import Testing
         // Phone A's backup now counts as "another drive": back up phone B to a new destination.
         let newDrive = a.root.appendingPathComponent("New drive")
         try FileManager.default.createDirectory(at: newDrive, withIntermediateDirectories: true)
-        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone B", files: b.files, destination: newDrive,
+        let plan = BackupEngine.makeDevicePlan(deviceName: "Phone B", deviceID: "device-B", files: b.files, destination: newDrive,
                                                references: [a.destination.appendingPathComponent("Test iPhone_backup")])
         #expect(plan.existing.folders == ["Test iPhone_backup"])
         let report = try await BackupEngine.runStaged(plan, fetch: b.fetch)

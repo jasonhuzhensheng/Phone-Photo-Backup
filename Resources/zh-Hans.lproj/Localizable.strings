@@ -77,12 +77,178 @@
 "Backup" = "备份";
 "Show Backup Folder in Finder" = "在访达中显示备份文件夹";
 
+/* Importing into Photos */
+"Phone Photo Backup is not allowed to use Photos. Allow it in System Settings > Privacy & Security > Photos, then try again." = "“手机照片备份”没有使用“照片”的权限。请在“系统设置 > 隐私与安全性 > 照片”中允许后再试。";
+"Imported from Old Phones" = "从旧手机导入";
+"There are no backups in the backup location yet." = "备份位置里还没有备份。";
+"The import record could not be saved: %@" = "无法保存导入记录：%@";
+"%@ files, %@, will be copied into:\n%@\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported." = "将把 %1$@ 个文件（%2$@）复制到：\n%3$@\n\n原文件不会被修改或删除。完成后，“照片”里还没有的照片和视频会被导入。";
+"Import into Photos?" = "导入到“照片”？";
+"Import" = "导入";
+"Up to %@ photos and videos (%@) will be added to Photos, in the album “%@”. Items already in Photos are skipped. With iCloud Photos turned on, they sync to your other devices." = "最多将有 %1$@ 项照片和视频（%2$@）添加到“照片”的“%3$@”相簿。已在“照片”里的会跳过。如果打开了 iCloud 照片，它们会同步到你的其他设备。";
+"Import into Photos after each backup (iCloud Photos then syncs them to your other devices)" = "每次备份后导入到“照片”（再由 iCloud 照片同步到你的其他设备）";
+"Import into Photos" = "导入“照片”";
+"Add all backups in the backup location to Photos, skipping duplicates" = "把备份位置里的所有备份导入“照片”，跳过重复项";
+"Import All Backups into Photos…" = "把所有备份导入“照片”…";
+"Done. You can unplug this phone and connect the next one." = "完成。可以拔下这部手机，接上下一部。";
+"Finding photos and videos to import…" = "正在查找要导入的照片和视频…";
+"Checking which photos are already in Photos…" = "正在检查哪些照片已经在“照片”里…";
+"Importing into Photos: %@ of %@" = "正在导入“照片”：%1$@ / %2$@";
+"Imported" = "已导入";
+"Already in Photos" = "已在“照片”中";
+"Duplicates skipped" = "跳过的重复项";
+"Import stopped. Run it again to continue." = "导入已停止。再次运行即可继续。";
+"Imported into Photos" = "已导入“照片”";
+"Import finished with errors" = "导入完成，但有错误";
+"Backups stay on this Mac. Photos syncs imports through your own iCloud Photos." = "备份留在这台 Mac 上；导入“照片”的内容由你自己的 iCloud 照片同步。";
+
+/* Review before backup */
+"Review before backup" = "备份前检查";
+"Click a picture to watch the video or see the photo full size. Pick what to delete, then either delete first and back up the rest, or back up first and delete afterwards. Deleted items go to Recently Deleted in Photos, where they can be recovered for 30 days; iCloud Photos then removes them from the phone too." = "点按图片可以播放视频或查看大图。选好要删除的项目后，可以先删除再备份其余内容，也可以先备份再删除。删除的项目会进入“照片”的“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
+"No videos larger than 50 MB." = "没有大于 50 MB 的视频。";
+"Largest videos" = "最占空间的视频";
+"Looking for duplicates… %@ of %@" = "正在查找重复项… %1$@ / %2$@";
+"No duplicates found." = "没有找到重复项。";
+"Oldest copy" = "最早的一份";
+"Every copy in this group is selected." = "这一组的所有副本都被选中了。";
+"Exact duplicates" = "完全相同的重复项";
+"Also back up the selected items (recommended)" = "所选项目也备份一份（推荐）";
+"Selected: %@ items, %@" = "已选：%1$@ 项，%2$@";
+"Back Up Without Deleting" = "只备份，不删除";
+"Back Up, Then Delete Selected" = "备份，然后删除所选";
+"Delete the selected items?" = "删除所选项目？";
+"Back Up, Then Delete" = "备份后删除";
+"%@ items (%@) will be backed up first. Only items with a verified backup copy are then moved to Recently Deleted in Photos. Items not found in Photos are left alone." = "%1$@ 项（%2$@）会先备份。只有备份经核对无误的项目，才会在“照片”中移到“最近删除”。在“照片”里找不到的项目不会被删除。";
+"%@ items (%@) will NOT be backed up. They are moved to Recently Deleted in Photos and can be recovered there for 30 days only. Items not found in Photos are left alone." = "%1$@ 项（%2$@）不会备份。它们会在“照片”中移到“最近删除”，只能在 30 天内从那里恢复。在“照片”里找不到的项目不会被删除。";
+"Before backing up or importing a phone, list the largest videos and duplicates to delete" = "备份或导入手机前，列出最占空间的视频和重复项，选择要删除的";
+"Start automatically when a phone is connected (skips the list)" = "接入手机后自动开始（不显示检查清单）";
+"Moving the selected items to Recently Deleted in Photos…" = "正在把所选项目移到“照片”的“最近删除”…";
+"%@ of %@ selected items moved to Recently Deleted in Photos" = "已将所选 %2$@ 项中的 %1$@ 项移到“照片”的“最近删除”";
+"Show items that were not deleted" = "显示未删除的项目";
+"No verified backup copy:" = "没有经核对的备份：";
+"Not found in Photos (delete these on the phone yourself):" = "在“照片”里找不到（请在手机上自行删除）：";
+
+/* Preview */
+"Play this video" = "播放这个视频";
+"Show this photo full size" = "查看大图";
+"%@ of %@" = "%1$@ / %2$@";
+"Previous (⌘←)" = "上一个（⌘←）";
+"Next (⌘→)" = "下一个（⌘→）";
+"Will be deleted" = "将删除";
+"Will be kept" = "保留";
+"Keep" = "保留";
+"Delete" = "删除";
+"Done" = "完成";
+"Keep this item and show the next one (⌘K)" = "保留这一项，并显示下一个（⌘K）";
+"Mark this item for deletion and show the next one (⌘⌫)" = "标记删除这一项，并显示下一个（⌘⌫）";
+"Showing the backup copy on this Mac." = "正在显示这台 Mac 上的备份副本。";
+"Playing straight from the phone. Large videos may pause while loading; keep the phone unlocked." = "正在直接从手机播放。大视频可能会停下来加载，请保持手机解锁。";
+"Read from the phone." = "从手机读取。";
+"Loading from the phone…" = "正在从手机读取…";
+"The preview could not be loaded. You can still decide from the details above." = "无法加载预览。仍可根据上方的信息决定。";
+"This file cannot be shown as an image." = "这个文件无法显示为图片。";
+
+/* Backup videos */
+"Backup Videos" = "备份里的视频";
+"Browse Backup Videos…" = "浏览备份里的视频…";
+"List the videos in the backup location by size, preview them and move unwanted ones to the Trash" = "按大小列出备份位置里的视频，可以预览，并把不要的移到废纸篓";
+"Date" = "日期";
+"Name" = "名称";
+"Sort by" = "排序方式";
+"Live Photo videos" = "实况照片视频";
+"Also list the short videos that belong to Live Photos" = "也列出属于实况照片的短视频";
+"Refresh" = "刷新";
+"Look for videos again" = "重新查找视频";
+"All backups" = "所有备份";
+"%@ videos" = "%@ 个视频";
+"No backup location" = "没有备份位置";
+"Choose a backup location in the main window first." = "请先在主窗口中选择备份位置。";
+"Looking for videos…" = "正在查找视频…";
+"Cannot read the backup location" = "无法读取备份位置";
+"No videos here" = "这里没有视频";
+"%@ videos, %@" = "%1$@ 个视频，%2$@";
+"Moved %@ videos (%@) to the Trash." = "已将 %1$@ 个视频（%2$@）移到废纸篓。";
+"%@ could not be moved" = "%@ 个无法移动";
+"Marked: %@ videos, %@" = "已标记：%1$@ 个视频，%2$@";
+"Clear" = "清除标记";
+"Move to Trash…" = "移到废纸篓…";
+"Move to Trash" = "移到废纸篓";
+"Wait until the backup or import has finished" = "请等备份或导入完成";
+"Move the marked videos to the Trash" = "把标记的视频移到废纸篓";
+"Move the marked videos to the Trash?" = "把标记的视频移到废纸篓？";
+"%@ videos (%@) will be moved to the Trash. You can put them back until you empty the Trash. A video that is still on a phone is copied again by that phone's next backup; videos already imported into Photos stay there." = "%1$@ 个视频（%2$@）将移到废纸篓。清倒废纸篓之前都可以放回原处。仍在手机上的视频，下次备份这部手机时会再复制一份；已导入“照片”的视频仍会留在“照片”里。";
+"Will be moved to the Trash" = "将移到废纸篓";
+"Live Photo" = "实况照片";
+"Play" = "播放";
+"The file is no longer there." = "文件已经不在了。";
+
+/* Review: selecting and deleting first */
+"Select All" = "全选";
+"Select None" = "全不选";
+"Select Extra Copies" = "选中多余副本";
+"Select every copy except the oldest one in each group" = "每组只保留最早的一份，选中其余副本";
+"Applies to “Back Up, Then Delete Selected”. Items deleted first are not backed up." = "用于“备份，然后删除所选”。先删除的项目不会备份。";
+"Delete Selected, Then Back Up…" = "先删除所选，再备份…";
+"Move the selected items to Recently Deleted in Photos first, then back up the rest of the phone" = "先把所选项目移到“照片”的“最近删除”，再备份手机上的其余内容";
+"Delete the selected items first?" = "先删除所选项目？";
+"Delete, Then Back Up" = "先删除，再备份";
+"%@ items (%@) are moved to Recently Deleted in Photos now and are not backed up; %@ of them already have a backup copy from an earlier backup. They can be recovered from Recently Deleted for 30 days. Then the rest of the phone is backed up. Items not found in Photos are left on the phone and backed up." = "%1$@ 项（%2$@）会现在移到“照片”的“最近删除”，不会备份；其中 %3$@ 项在以前的备份里已有副本。30 天内可以从“最近删除”恢复。之后备份手机上的其余内容。在“照片”里找不到的项目会留在手机上，并照常备份。";
+"Finding the selected items in Photos… Click Cancel to stop; nothing is deleted until macOS asks you to confirm." = "正在“照片”中查找所选项目…点“取消”可以停止；在 macOS 弹出确认之前不会删除任何东西。";
+
+/* Direct import from a phone */
+"Import This Phone Directly (No Backup)…" = "直接导入这部手机（不备份）…";
+"Import All Backups…" = "导入所有备份…";
+"Import This Phone into Photos (No Backup)…" = "把这部手机直接导入“照片”（不备份）…";
+"Add photos and videos to Photos, skipping ones already there: straight from the connected phone, or from all backups in the backup location" = "把照片和视频导入“照片”，已有的会跳过：可以直接从连接的手机导入，也可以从备份位置里的所有备份导入";
+
+/* Review before a direct import into Photos */
+"Review before importing into Photos" = "导入“照片”前检查";
+"Click a picture to watch the video or see the photo full size. Pick what you don't want, then delete it and import the rest. Selected items that are already in Photos go to Recently Deleted, where they can be recovered for 30 days, and iCloud Photos removes them from the phone too. Selected items are not imported either way." = "点按图片可以播放视频或查看大图。选出不想要的项目，删除后再导入其余内容。所选项目如果已在“照片”里，会进入“最近删除”，30 天内可以恢复，iCloud 照片也会把它们从手机上删除。无论是否在“照片”里，所选项目都不会导入。";
+"Import Without Deleting" = "只导入，不删除";
+"Delete Selected, Then Import…" = "删除所选项目，再导入…";
+"Move the selected items to Recently Deleted in Photos, then import the rest of the phone" = "先把所选项目移到“照片”的“最近删除”，再导入手机上的其余内容";
+"Delete the selected items, then import?" = "删除所选项目后再导入？";
+"Delete, Then Import" = "删除后导入";
+"%@ items (%@) are not imported. Those already in Photos are moved to Recently Deleted now and can be recovered there for 30 days; there is no backup copy. Those not in Photos stay on the phone; delete them there if you don't want them. Later imports of this phone leave them out too. Then the rest of the phone is imported into Photos." = "%1$@ 项（%2$@）不会导入。其中已在“照片”里的现在移到“最近删除”，30 天内可以恢复，但没有备份副本。不在“照片”里的仍留在手机上，不想要的话请在手机上删除。以后导入这部手机时也会跳过它们。然后把手机上的其余内容导入“照片”。";
+
+/* Version and updates */
+"Check for Updates…" = "检查更新…";
+"Check for Updates Automatically" = "自动检查更新";
+"Check for updates automatically" = "自动检查更新";
+"Version %@" = "版本 %@";
+"Build %@" = "构建号 %@";
+"Update to %@" = "更新到 %@";
+"Current version: %@ (%@)" = "当前版本：%1$@（%2$@）";
+"Checking for updates…" = "正在检查更新…";
+"Phone Photo Backup is up to date" = "手机照片备份已是最新版本";
+"Version %@ is available" = "有新版本 %@";
+"Downloading version %@…" = "正在下载版本 %@…";
+"Installing version %@…" = "正在安装版本 %@…";
+"Update problem" = "更新出错";
+"You have the latest version." = "你用的是最新版本。";
+"Finish or stop the current backup or import first." = "请先等当前的备份或导入完成，或者停止它。";
+"This release has no checksum, so it cannot be installed automatically. Open the release page to download it." = "这个版本没有提供校验值，不能自动安装。请打开发布页面下载。";
+"The app downloads the new version, checks it and restarts. Your settings and backups are kept." = "程序会下载新版本、核对无误后重启。你的设置和备份都会保留。";
+"Checking the download and restarting…" = "正在核对下载内容并重启…";
+"No release notes." = "没有更新说明。";
+"Release Page" = "发布页面";
+"Later" = "以后再说";
+"Open Release Page" = "打开发布页面";
+"Install and Restart" = "安装并重启";
+"Updates work only in the installed app." = "只有安装好的应用才能更新。";
+"Could not check for updates: %@" = "无法检查更新：%@";
+"This app's folder (%@) cannot be changed. Download the new version from the release page instead." = "无法修改应用所在的文件夹（%@）。请从发布页面下载新版本。";
+"The downloaded update is damaged (SHA-256 does not match). Nothing was changed." = "下载的更新已损坏（SHA-256 不一致），没有做任何改动。";
+"The downloaded update does not contain the app. Nothing was changed." = "下载的更新里没有应用，没有做任何改动。";
+"The downloaded update is a different app (%@). Nothing was changed." = "下载的更新是另一个应用（%@），没有做任何改动。";
+"The downloaded update has version %@, not the one offered. Nothing was changed." = "下载的更新版本是 %@，与提示的版本不同，没有做任何改动。";
+"The downloaded app's code signature is not valid. Nothing was changed." = "下载的应用代码签名无效，没有做任何改动。";
+
 /* Duplicates across backups */
 "Already backed up" = "已备份过";
 "New" = "新文件";
 "%@ files · %@" = "%1$@ 个文件 · %2$@";
 "Compared with %@ by name and size. During the backup every file is checked with SHA-256; files already stored there are not stored again." = "已按文件名和大小与 %@ 比对。备份时每个文件都会用 SHA-256 确认，已在其中保存过的文件不会再存一份。";
-"Duplicates skipped" = "重复已跳过";
 "%@ files, %@, will be copied into:\n%@\n\nAbout %@ of them (%@) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted." = "将处理 %1$@ 个文件（%2$@），备份到：\n%3$@\n\n其中约 %4$@ 个（%5$@）已在本盘的其他备份中，不会再存一份。\n\n原文件不会被修改或删除。";
 "Compare with" = "参照文件夹";
 "Optional: folders already backed up (another drive, an older backup). Files found there are not backed up again. Other backups on the backup drive are always compared." = "可选：以前备份过的文件夹（其他硬盘、旧的备份）。其中已有的文件不会再备份。备份盘上的其他备份始终会参与比对。";
@@ -92,3 +258,4 @@
 "Choose folders that are already backed up. Files found in them are not backed up again." = "选择已经备份过的文件夹。其中已有的文件不会再备份。";
 "Free on drive" = "备份盘剩余";
 "Not enough space for about %@ of new files" = "空间不足，新文件约需 %@";
+"%@ files, %@, will be copied into:\n%@\n\nAbout %@ of them (%@) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported." = "将处理 %1$@ 个文件（%2$@），备份到：\n%3$@\n\n其中约 %4$@ 个（%5$@）已在本盘的其他备份中，不会再存一份。\n\n原文件不会被修改或删除。之后会把“照片”里还没有的照片和视频导入。";

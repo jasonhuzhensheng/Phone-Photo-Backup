@@ -15,23 +15,28 @@ extension BackupEngine {
     public static let stagingFolderName = ".phone-photo-backup-staging"
     /// Prefix of the per-run staging folder created in the temporary directory.
     static let localStagingPrefix = "PhonePhotoBackup-staging-"
+    /// File inside a device backup folder holding the identifier of the device it belongs to.
+    public static let deviceMarkerName = ".phone-photo-backup-device"
 
     /// Fetches one file into `directory` and returns the URL of the file it wrote there.
     public typealias Fetch = @Sendable (_ file: PlannedFile, _ directory: URL) async throws -> URL
 
     /// Plans a backup of files listed by a device. The backup folder is `<device name>_backup`.
-    public static func makeDevicePlan(deviceName: String, files: [PlannedFile], destination: URL,
+    /// Phones often share a name ("iPhone"), so each folder is tied to one device: a folder that
+    /// belongs to another device, or to a folder backup, is never reused; `<name> 2_backup`,
+    /// `<name> 3_backup`… are used instead. Other backups on the destination and `references`
+    /// are indexed so files already stored there are not stored again.
+    public static func makeDevicePlan(deviceName: String, deviceID: String, files: [PlannedFile], destination: URL,
                                       references: [URL] = []) -> BackupPlan {
-        let name = safeFolderName(deviceName)
         let destinationPath = FS.canonicalPath(destination.path)
-        let backupPath = (destinationPath as NSString).appendingPathComponent(name + "_backup")
+        let (name, backupPath) = deviceFolder(name: safeFolderName(deviceName), id: deviceID, in: destinationPath)
         var seen = Set<String>()
         let unique = files.filter { seen.insert($0.relativePath).inserted }
         let sorted = unique.sorted {
             let a = $0.relativePath.lowercased(), b = $1.relativePath.lowercased()
             return a == b ? $0.relativePath < $1.relativePath : a < b
         }
-        return BackupPlan(
+        var plan = BackupPlan(
             sourceName: name,
             sourceDirectory: nil,
             backupDirectory: URL(fileURLWithPath: backupPath, isDirectory: true),
@@ -40,6 +45,26 @@ extension BackupEngine {
             existing: ExistingBackups.load(destination: destinationPath, excluding: name + "_backup",
                                            references: references)
         )
+        plan.deviceID = deviceID
+        return plan
+    }
+
+    /// The first `<name>[ n]_backup` folder that is free or already belongs to `id`.
+    static func deviceFolder(name: String, id: String, in destinationPath: String) -> (name: String, path: String) {
+        var number = 1
+        while true {
+            let candidate = number == 1 ? name : "\(name) \(number)"
+            let path = (destinationPath as NSString).appendingPathComponent(candidate + "_backup")
+            let marker = (path as NSString).appendingPathComponent(deviceMarkerName)
+            if (try? FS.lstatIfExists(path)) == nil {
+                return (candidate, path)
+            }
+            if let owner = try? String(contentsOfFile: marker, encoding: .utf8),
+               owner.trimmingCharacters(in: .whitespacesAndNewlines) == id {
+                return (candidate, path)
+            }
+            number += 1
+        }
     }
 
     /// Joins path components reported by a device into a relative path that always stays inside
@@ -68,6 +93,12 @@ extension BackupEngine {
         try FileManager.default.createDirectory(atPath: backupDir, withIntermediateDirectories: true)
         let manifestPath = (backupDir as NSString).appendingPathComponent(manifestName)
         var manifest = try Manifest.load(from: manifestPath, sourceName: plan.sourceName)
+        if let deviceID = plan.deviceID {
+            let marker = (backupDir as NSString).appendingPathComponent(deviceMarkerName)
+            if (try? FS.lstatIfExists(marker)) == nil {
+                try FS.writeAtomically(Data((deviceID + "\n").utf8), to: marker)
+            }
+        }
 
         // Leftovers from interrupted runs (and from versions that staged inside the backup folder).
         try? FileManager.default.removeItem(atPath: (backupDir as NSString).appendingPathComponent(stagingFolderName))

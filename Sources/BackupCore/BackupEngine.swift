@@ -61,11 +61,22 @@ public struct BackupPlan: Sendable {
     public let sourceName: String
     /// The source folder, or nil when the files come from a connected device.
     public let sourceDirectory: URL?
+    /// Stable identifier of the source device; nil for folders.
+    public var deviceID: String? = nil
     public let backupDirectory: URL
     public let files: [PlannedFile]
     public let totalBytes: Int64
     /// Other backups on the same destination; files found there are not stored again.
     public var existing = ExistingBackups()
+
+    /// The same plan without the files at `paths`.
+    public func excluding(_ paths: Set<String>) -> BackupPlan {
+        let kept = files.filter { !paths.contains($0.relativePath) }
+        var plan = BackupPlan(sourceName: sourceName, sourceDirectory: sourceDirectory, backupDirectory: backupDirectory,
+                              files: kept, totalBytes: kept.reduce(0) { $0 + $1.size }, existing: existing)
+        plan.deviceID = deviceID
+        return plan
+    }
 }
 
 public enum FileOutcome: String, Sendable {
@@ -245,7 +256,7 @@ public enum BackupEngine {
 
     // MARK: Helpers
 
-    static func sha256(of path: String) throws -> String {
+    public static func sha256(of path: String) throws -> String {
         let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
         defer { try? handle.close() }
         var hasher = SHA256()

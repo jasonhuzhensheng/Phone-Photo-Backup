@@ -61,6 +61,23 @@ enum FS {
         return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
 
+    /// Writes `data` to a temporary file next to `path`, flushes it and renames it over `path`.
+    static func writeAtomically(_ data: Data, to path: String) throws {
+        let directory = (path as NSString).deletingLastPathComponent
+        let temporary = (directory as NSString)
+            .appendingPathComponent(".photo-backup-\(UUID().uuidString.lowercased()).tmp")
+        do {
+            let handle = try createExclusive(temporary)
+            try handle.write(contentsOf: data)
+            try handle.synchronize()
+            try handle.close()
+            guard rename(temporary, path) == 0 else { throw posixError(path) }
+        } catch {
+            unlink(temporary)
+            throw error
+        }
+    }
+
     /// Forces a file's contents to permanent storage.
     static func flush(_ path: String) throws {
         let fd = open(path, O_RDONLY | O_CLOEXEC)

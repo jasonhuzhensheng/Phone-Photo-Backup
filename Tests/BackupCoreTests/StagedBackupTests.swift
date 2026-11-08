@@ -38,6 +38,7 @@ final class DeviceFixture {
     let root: URL
     let destination: URL
     let device: FakeDevice
+    var deviceID = "device-A"
 
     init(_ contents: [String: Data] = [
         "DCIM/100APPLE/IMG_0001.HEIC": Data("simulated heic".utf8),
@@ -52,7 +53,7 @@ final class DeviceFixture {
     deinit { try? FileManager.default.removeItem(at: root) }
 
     func plan() -> BackupPlan {
-        BackupEngine.makeDevicePlan(deviceName: "Test iPhone", files: device.files, destination: destination)
+        BackupEngine.makeDevicePlan(deviceName: "Test iPhone", deviceID: deviceID, files: device.files, destination: destination)
     }
 
     func backup(isCancelled: @escaping @Sendable () -> Bool = { false }, progress: BackupProgress? = nil) async throws -> BackupReport {
@@ -137,6 +138,31 @@ final class DeviceFixture {
         #expect(resumed.copied == 4)
     }
 
+    @Test func phonesWithTheSameNameGetSeparateFolders() async throws {
+        let f = try DeviceFixture()
+        let first = try await f.backup()
+        f.deviceID = "device-B"
+        let other = try await f.backup()
+        #expect(first.backupDirectory.lastPathComponent == "Test iPhone_backup")
+        #expect(other.backupDirectory.lastPathComponent == "Test iPhone 2_backup")
+        // Not mistaken for "unchanged" in the first phone's folder; the identical files are found
+        // in the other backup on the drive and recorded as duplicates instead of stored twice.
+        #expect(other.unchanged == 0)
+        #expect(other.copied + other.duplicates == 2)
+        #expect(other.duplicates == 2)
+        f.deviceID = "device-A"
+        let again = try await f.backup()
+        #expect(again.backupDirectory.lastPathComponent == "Test iPhone_backup")
+        #expect(again.unchanged == 2)
+    }
+
+    @Test func folderBackupWithTheSameNameIsNotReused() throws {
+        let f = try DeviceFixture()
+        let taken = f.destination.appendingPathComponent("Test iPhone_backup")
+        try FileManager.default.createDirectory(at: taken, withIntermediateDirectories: true)
+        #expect(f.plan().backupDirectory.lastPathComponent == "Test iPhone 2_backup")
+    }
+
     @Test func stagingHappensOutsideTheBackupFolderAndIsCleanedUp() async throws {
         let f = try DeviceFixture()
         let parent = f.root.appendingPathComponent("local-staging")
@@ -181,7 +207,7 @@ final class DeviceFixture {
     @Test func duplicatePathsArePlannedOnce() throws {
         let f = try DeviceFixture()
         let files = f.device.files + f.device.files
-        let plan = BackupEngine.makeDevicePlan(deviceName: "iPhone", files: files, destination: f.destination)
+        let plan = BackupEngine.makeDevicePlan(deviceName: "iPhone", deviceID: "x", files: files, destination: f.destination)
         #expect(plan.files.count == 2)
         #expect(plan.sourceDirectory == nil)
     }
