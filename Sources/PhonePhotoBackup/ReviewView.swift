@@ -21,7 +21,13 @@ final class ReviewSession {
     /// Also keep a backup copy of the selected items (recommended).
     var backUpSelected = true
     private(set) var thumbnails: [String: NSImage] = [:]
+    /// True while selected items are being moved to Recently Deleted from the list.
+    private(set) var isDeleting = false
+    /// The result of the last "Delete Selected Now".
+    private(set) var deletion: BackupModel.DeletionReport?
     @ObservationIgnored private var items: [String: PhoneItem] = [:]
+    /// Items already deleted from this list; kept out of duplicate results that arrive later.
+    @ObservationIgnored private var removed: Set<String> = []
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var requestedThumbnails: Set<String> = []
 
@@ -43,9 +49,9 @@ final class ReviewSession {
                     Task { @MainActor in self.stage = .hashing(done: done, total: total) }
                 })
                 await Task.yield()
-                duplicates = groups
+                duplicates = groups.compactMap(withoutRemoved)
                 // Suggest deleting every copy except the oldest; nothing else is pre-selected.
-                selected.formUnion(groups.flatMap { $0.extras.map(\.relativePath) })
+                selected.formUnion(duplicates.flatMap { $0.extras.map(\.relativePath) })
                 stage = .ready
             } catch is CancellationError {
             } catch {
@@ -55,6 +61,35 @@ final class ReviewSession {
     }
 
     func cancel() { task?.cancel() }
+
+    func beginDeletion() {
+        isDeleting = true
+        deletion = nil
+    }
+
+    /// Takes the deleted items out of the list and the selection.
+    func finishDeletion(_ result: BackupModel.DeletionReport, removed paths: Set<String>) {
+        isDeleting = false
+        deletion = result
+        removed.formUnion(paths)
+        largeVideos.removeAll { paths.contains($0.relativePath) }
+        duplicates = duplicates.compactMap(withoutRemoved)
+        selected.subtract(paths)
+        for path in paths { items[path] = nil }
+    }
+
+    func select(_ list: [PhoneItem], _ on: Bool) {
+        let paths = list.map(\.relativePath)
+        if on { selected.formUnion(paths) } else { selected.subtract(paths) }
+    }
+
+    /// All copies of every duplicate group except the oldest.
+    var duplicateExtras: [PhoneItem] { duplicates.flatMap(\.extras) }
+
+    private func withoutRemoved(_ group: DuplicateGroup) -> DuplicateGroup? {
+        let files = group.files.filter { !removed.contains($0.relativePath) }
+        return files.count > 1 ? DuplicateGroup(sha256: group.sha256, files: files) : nil
+    }
 
     func loadThumbnail(_ path: String, devices: DeviceBrowser) {
         guard requestedThumbnails.insert(path).inserted else { return }
@@ -86,12 +121,15 @@ struct ReviewSheet: View {
     @Bindable var review: ReviewSession
     @State private var confirmingDelete = false
     @State private var previewing: PreviewTarget?
+    @State private var confirmingDeleteFirst = false
+    /// How many of the selected items already have a backup copy (shown when deleting first).
+    @State private var selectedBackedUp = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Review before backup").font(.title2.weight(.semibold))
-                Text("Click a picture to watch the video or see the photo full size. Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too.")
+                Text("Click a picture to watch the video or see the photo full size. Pick what to delete, then either delete first and back up the rest, or back up first and delete afterwards. Deleted items go to Recently Deleted in Photos, where they can be recovered for 30 days; iCloud Photos then removes them from the phone too.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -106,7 +144,11 @@ struct ReviewSheet: View {
                         ItemRow(item: item, review: review, note: nil, preview: preview)
                     }
                 } header: {
-                    Text("Largest videos")
+                    SectionHeader(title: "Largest videos") {
+                        Button("Select All") { review.select(review.largeVideos, true) }
+                        Button("Select None") { review.select(review.largeVideos, false) }
+                    }
+                    .disabled(review.largeVideos.isEmpty)
                 }
 
                 Section {
@@ -137,27 +179,52 @@ struct ReviewSheet: View {
                         .padding(.vertical, 4)
                     }
                 } header: {
-                    Text("Exact duplicates")
+                    SectionHeader(title: "Exact duplicates") {
+                        Button("Select Extra Copies") { review.select(review.duplicateExtras, true) }
+                            .help("Select every copy except the oldest one in each group")
+                        Button("Select None") { review.select(review.duplicates.flatMap(\.files), false) }
+                    }
+                    .disabled(review.duplicates.isEmpty)
                 }
             }
             .listStyle(.inset)
             .frame(minHeight: 320)
 
-            Toggle("Also back up the selected items (recommended)", isOn: $review.backUpSelected)
-                .toggleStyle(.checkbox)
+            if review.isDeleting {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Moving the selected items to Recently Deleted in Photos…").foregroundStyle(.secondary)
+                }
+            } else if let result = review.deletion {
+                DeletionSummary(result: result)
+            }
 
             HStack {
+                Toggle("Also back up the selected items (recommended)", isOn: $review.backUpSelected)
+                    .toggleStyle(.checkbox)
+                    .help("Applies to “Back Up, Then Delete Selected”. Items deleted first are not backed up.")
+                Spacer()
                 Text("Selected: \(review.selected.count.formatted()) items, \(ByteCountFormatter.string(fromByteCount: review.selectedBytes, countStyle: .file))")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Spacer()
+            }
+
+            HStack {
                 Button("Cancel", role: .cancel) { model.closeReview() }
                     .keyboardShortcut(.cancelAction)
+                Spacer()
                 Button("Back Up Without Deleting") { model.finishReview(delete: false) }
+                Button("Delete Selected, Then Back Up…", role: .destructive) {
+                    selectedBackedUp = model.plan.map { PhoneReview.backedUp(review.selectedItems, in: $0.backupDirectory).safe.count } ?? 0
+                    confirmingDeleteFirst = true
+                }
+                .disabled(review.selected.isEmpty)
+                .help("Move the selected items to Recently Deleted in Photos first, then back up the rest of the phone")
                 Button("Back Up, Then Delete Selected") { confirmingDelete = true }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(review.selected.isEmpty || review.stage != .ready)
+                    .disabled(review.selected.isEmpty)
             }
+            .disabled(review.isDeleting)
         }
         .padding(20)
         .frame(minWidth: 760, idealWidth: 860, minHeight: 640)
@@ -173,6 +240,12 @@ struct ReviewSheet: View {
                                                   backupDirectory: model.plan?.backupDirectory))
                 .environment(model)
         }
+        .confirmationDialog("Delete the selected items first?", isPresented: $confirmingDeleteFirst) {
+            Button("Delete, Then Back Up", role: .destructive) { model.deleteSelectedThenBackUp() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(review.selected.count.formatted()) items (\(ByteCountFormatter.string(fromByteCount: review.selectedBytes, countStyle: .file))) are moved to Recently Deleted in Photos now and are not backed up; \(selectedBackedUp.formatted()) of them already have a backup copy from an earlier backup. They can be recovered from Recently Deleted for 30 days. Then the rest of the phone is backed up. Items not found in Photos are left on the phone and backed up.")
+        }
         .confirmationDialog("Delete the selected items?", isPresented: $confirmingDelete) {
             Button("Back Up, Then Delete", role: .destructive) { model.finishReview(delete: true) }
             Button("Cancel", role: .cancel) {}
@@ -187,6 +260,22 @@ struct ReviewSheet: View {
 
     private func preview(_ item: PhoneItem) {
         previewing = PreviewTarget(id: item.relativePath)
+    }
+}
+
+/// A list section title with small selection buttons on the right.
+private struct SectionHeader<Buttons: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder let buttons: Buttons
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            HStack(spacing: 12) { buttons }
+                .buttonStyle(.link)
+                .font(.caption)
+        }
     }
 }
 

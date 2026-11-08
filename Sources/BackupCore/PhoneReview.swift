@@ -27,6 +27,12 @@ public struct DuplicateGroup: Sendable, Hashable, Identifiable {
 
     public var id: String { sha256 }
     public var keep: PhoneItem { files[0] }
+
+    public init(sha256: String, files: [PhoneItem]) {
+        self.sha256 = sha256
+        self.files = files
+    }
+
     public var extras: [PhoneItem] { Array(files.dropFirst()) }
     /// Space freed by deleting every copy except one.
     public var reclaimable: Int64 { extras.reduce(0) { $0 + $1.size } }

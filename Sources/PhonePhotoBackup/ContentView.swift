@@ -455,7 +455,7 @@ private struct PlanSummary: View {
     }
 }
 
-private struct DeletionSummary: View {
+struct DeletionSummary: View {
     @State private var showDetails = false
     let result: BackupModel.DeletionReport
 

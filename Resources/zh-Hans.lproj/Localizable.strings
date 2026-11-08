@@ -104,7 +104,7 @@
 
 /* Review before backup */
 "Review before backup" = "备份前检查";
-"Click a picture to watch the video or see the photo full size. Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too." = "点按图片可以播放视频或查看大图。选择要删除的项目。备份完成后，所选项目会在“照片”中删除并进入“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
+"Click a picture to watch the video or see the photo full size. Pick what to delete, then either delete first and back up the rest, or back up first and delete afterwards. Deleted items go to Recently Deleted in Photos, where they can be recovered for 30 days; iCloud Photos then removes them from the phone too." = "点按图片可以播放视频或查看大图。选好要删除的项目后，可以先删除再备份其余内容，也可以先备份再删除。删除的项目会进入“照片”的“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
 "No videos larger than 50 MB." = "没有大于 50 MB 的视频。";
 "Largest videos" = "最占空间的视频";
 "Looking for duplicates… %@ of %@" = "正在查找重复项… %1$@ / %2$@";
@@ -181,3 +181,15 @@
 "Live Photo" = "实况照片";
 "Play" = "播放";
 "The file is no longer there." = "文件已经不在了。";
+
+/* Review: selecting and deleting first */
+"Select All" = "全选";
+"Select None" = "全不选";
+"Select Extra Copies" = "选中多余副本";
+"Select every copy except the oldest one in each group" = "每组只保留最早的一份，选中其余副本";
+"Applies to “Back Up, Then Delete Selected”. Items deleted first are not backed up." = "用于“备份，然后删除所选”。先删除的项目不会备份。";
+"Delete Selected, Then Back Up…" = "先删除所选，再备份…";
+"Move the selected items to Recently Deleted in Photos first, then back up the rest of the phone" = "先把所选项目移到“照片”的“最近删除”，再备份手机上的其余内容";
+"Delete the selected items first?" = "先删除所选项目？";
+"Delete, Then Back Up" = "先删除，再备份";
+"%@ items (%@) are moved to Recently Deleted in Photos now and are not backed up; %@ of them already have a backup copy from an earlier backup. They can be recovered from Recently Deleted for 30 days. Then the rest of the phone is backed up. Items not found in Photos are left on the phone and backed up." = "%1$@ 项（%2$@）会现在移到“照片”的“最近删除”，不会备份；其中 %3$@ 项在以前的备份里已有副本。30 天内可以从“最近删除”恢复。之后备份手机上的其余内容。在“照片”里找不到的项目会留在手机上，并照常备份。";

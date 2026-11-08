@@ -17,6 +17,8 @@ final class BackupModel {
         /// Selected, but not matched to exactly one item in Photos, so not deleted.
         var notInPhotos: [String] = []
         var error: String?
+        /// Phone paths of the items that were moved to Recently Deleted.
+        var deletedPaths: [String] = []
     }
 
     enum ImportStage: Equatable {
@@ -353,12 +355,45 @@ final class BackupModel {
     /// without exactly one match is left alone.
     private func performDeletion(_ items: [PhoneItem], requireBackup: Bool, backupDirectory: URL, destination: URL) async {
         phase = .deleting
+        deletionReport = await deleteThroughPhotos(items, requireBackup: requireBackup,
+                                                   backupDirectory: backupDirectory, destination: destination)
+    }
+
+    /// "Delete first, then back up": moves the selected items to Recently Deleted in Photos, takes
+    /// the deleted ones out of the backup and then backs up the rest of the phone. Items not found
+    /// in Photos stay on the phone and are backed up. If deleting fails (no permission, the macOS
+    /// prompt was declined) the list stays open with the error and nothing is backed up.
+    func deleteSelectedThenBackUp() {
+        guard let review, !review.isDeleting, !review.selected.isEmpty else { return }
+        let items = review.selectedItems
+        let backupDirectory = plan?.backupDirectory
+        let destination = destinationURL
+        review.beginDeletion()
+        Task {
+            let result = await deleteThroughPhotos(items, requireBackup: false,
+                                                   backupDirectory: backupDirectory, destination: destination)
+            let removed = Set(result.deletedPaths)
+            if let plan = self.plan, !removed.isEmpty { self.plan = plan.excluding(removed) }
+            review.finishDeletion(result, removed: removed)
+            guard result.error == nil, self.review === review else { return }
+            review.cancel()
+            self.review = nil
+            self.pendingDeletion = nil
+            self.startBackup()
+            self.deletionReport = result // shown with the backup result
+        }
+    }
+
+    /// Finds `items` in Photos (one strict match each) and moves them to Recently Deleted.
+    /// With `requireBackup`, only items with a verified copy in `backupDirectory` are deleted.
+    private func deleteThroughPhotos(_ items: [PhoneItem], requireBackup: Bool,
+                                     backupDirectory: URL?, destination: URL?) async -> DeletionReport {
         var result = DeletionReport(requested: items.count)
         do {
             try await PhotoLibraryImporter.authorize()
             var candidates = items
             if requireBackup {
-                let split = PhoneReview.backedUp(items, in: backupDirectory)
+                let split = backupDirectory.map { PhoneReview.backedUp(items, in: $0) } ?? (safe: [], missing: items)
                 candidates = split.safe
                 result.notBackedUp = split.missing.map(\.relativePath)
             }
@@ -375,17 +410,20 @@ final class BackupModel {
             }
             if !identifiers.isEmpty {
                 result.deleted = try await PhotoLibraryImporter.moveToRecentlyDeleted(identifiers)
-                // Keep a later import from putting them back into Photos.
-                var ledger = try ImportLedger.load(from: destination)
-                for sha in PhoneReview.backupHashes(of: matched, in: backupDirectory).values {
-                    ledger.markDeleted(sha)
+                result.deletedPaths = matched.map(\.relativePath)
+                // Keep a later import from putting backed-up copies back into Photos.
+                if let destination, let backupDirectory {
+                    var ledger = try ImportLedger.load(from: destination)
+                    for sha in PhoneReview.backupHashes(of: matched, in: backupDirectory).values {
+                        ledger.markDeleted(sha)
+                    }
+                    try ledger.write(to: destination)
                 }
-                try ledger.write(to: destination)
             }
         } catch {
             result.error = error.localizedDescription
         }
-        deletionReport = result
+        return result
     }
 
     // MARK: Importing into Photos
