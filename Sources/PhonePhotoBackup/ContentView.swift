@@ -11,9 +11,7 @@ struct ContentView: View {
             header
             GroupBox {
                 VStack(spacing: 0) {
-                    FolderRow(title: "Source folder", placeholder: "Folder exported from your phone",
-                              systemImage: "iphone", url: model.sourceURL, disabled: model.isBusy,
-                              choose: model.chooseSource, drop: model.setSource)
+                    SourceRow()
                     Divider().padding(.vertical, 8)
                     FolderRow(title: "Backup location", placeholder: "A separate folder or external drive",
                               systemImage: "externaldrive", url: model.destinationURL, disabled: model.isBusy,
@@ -66,7 +64,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             switch model.phase {
-            case .backingUp:
+            case .backingUp, .scanning:
                 Button("Stop", role: .cancel) { model.cancel() }
                     .keyboardShortcut(.cancelAction)
             default:
@@ -79,6 +77,118 @@ struct ContentView: View {
             }
         }
         .controlSize(.large)
+    }
+}
+
+// MARK: - Source row
+
+/// The source: a connected phone (picked from a menu) or a folder (picked or dropped).
+private struct SourceRow: View {
+    @Environment(BackupModel.self) private var model
+    @State private var targeted = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            icon.frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Source").font(.headline)
+                subtitle
+            }
+            Spacer(minLength: 8)
+            Menu {
+                if model.devices.devices.isEmpty {
+                    Text("No phone connected")
+                }
+                ForEach(model.devices.devices) { device in
+                    Button {
+                        model.setSourceDevice(device.id)
+                    } label: {
+                        Label(device.name, systemImage: "iphone")
+                    }
+                }
+                Divider()
+                Button("Folder…", action: model.chooseSource)
+            } label: {
+                Text(model.source == nil ? LocalizedStringKey("Choose…") : LocalizedStringKey("Change…"))
+            }
+            .menuStyle(.button)
+            .fixedSize()
+            .disabled(model.isBusy)
+        }
+        .padding(6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(targeted ? Color.accentColor.opacity(0.15) : .clear))
+        .contentShape(Rectangle())
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !model.isBusy, let folder = urls.first(where: \.hasDirectoryPath) ?? urls.first.flatMap(folderURL) else { return false }
+            model.setSource(folder)
+            return true
+        } isTargeted: { targeted = $0 }
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch model.source {
+        case .folder(let url):
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable()
+        case .device:
+            if let image = model.sourceDevice?.icon {
+                Image(nsImage: image).resizable().scaledToFit()
+            } else {
+                Image(systemName: "iphone").font(.title2).foregroundStyle(.tint)
+            }
+        case nil:
+            Image(systemName: "iphone").font(.title2).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var subtitle: some View {
+        switch model.source {
+        case .folder(let url):
+            Text(verbatim: url.path)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(url.path)
+        case .device:
+            if let device = model.sourceDevice {
+                HStack(spacing: 6) {
+                    Text(verbatim: device.name).font(.callout)
+                    DeviceStatus(state: device.state)
+                }
+                .lineLimit(1)
+            } else {
+                Text("Phone not connected").font(.callout).foregroundStyle(.orange)
+            }
+        case nil:
+            Text("Connect your phone with a USB cable, or choose an exported folder")
+                .font(.callout).foregroundStyle(.tertiary)
+        }
+    }
+
+    private func folderURL(_ url: URL) -> URL? {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
+        return url
+    }
+}
+
+/// One-line status of a connected phone.
+struct DeviceStatus: View {
+    let state: DeviceBrowser.State
+
+    var body: some View {
+        switch state {
+        case .connecting:
+            Text("· Connecting…").font(.callout).foregroundStyle(.secondary)
+        case .locked:
+            Text("· Unlock the phone and tap “Trust”").font(.callout).foregroundStyle(.orange)
+        case .reading(let count):
+            Text("· Reading file list… \(count.formatted()) items").font(.callout).foregroundStyle(.secondary)
+        case .ready(let count):
+            Text("· \(count.formatted()) items").font(.callout).foregroundStyle(.secondary)
+        case .failed(let message):
+            Text(verbatim: "· " + message).font(.callout).foregroundStyle(.red).help(message)
+        }
     }
 }
 
@@ -153,7 +263,12 @@ private struct StatusPanel: View {
                 case .scanning:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Scanning source files…")
+                        if let device = model.sourceDevice {
+                            Text("Reading the file list from \(device.name)…")
+                            DeviceStatus(state: device.state)
+                        } else {
+                            Text("Scanning source files…")
+                        }
                     }
                 case .ready:
                     if let plan = model.plan { PlanSummary(plan: plan) }
@@ -170,8 +285,8 @@ private struct StatusPanel: View {
 
     private var hint: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Export photos from your phone to a folder on this Mac first.", systemImage: "1.circle")
-            Label("Choose that folder and a separate backup location — or drag folders onto the rows above.", systemImage: "2.circle")
+            Label("Connect your phone with a USB cable and unlock it. On iPhone tap “Trust”; on Android choose “Transfer photos (PTP)”.", systemImage: "1.circle")
+            Label("Choose the phone (or a folder exported from it) and a separate backup location.", systemImage: "2.circle")
             Label("Scan to review the file count and size, then start the backup.", systemImage: "3.circle")
         }
         .foregroundStyle(.secondary)
@@ -192,6 +307,28 @@ private struct StatusPanel: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if case .device = model.source {
+                deviceNotice
+            }
+        }
+    }
+
+    @ViewBuilder private var deviceNotice: some View {
+        if let device = model.sourceDevice {
+            switch device.state {
+            case .ready:
+                Label("Keep the phone unlocked and connected until the backup finishes.", systemImage: "iphone")
+                    .font(.caption).foregroundStyle(.secondary)
+            case .locked:
+                Label("Paused: the phone is locked. Unlock it to continue.", systemImage: "lock.iphone")
+                    .font(.caption).foregroundStyle(.orange)
+            default:
+                Label("Paused: reconnecting to the phone…", systemImage: "iphone.radiowaves.left.and.right")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+        } else {
+            Label("Paused: the phone was disconnected. Reconnect and unlock it to continue.", systemImage: "cable.connector.slash")
+                .font(.caption).foregroundStyle(.orange)
         }
     }
 }

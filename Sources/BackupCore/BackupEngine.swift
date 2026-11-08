@@ -13,6 +13,7 @@ public struct BackupError: LocalizedError, Equatable, Sendable {
         case manifestUnreadable
         case manifestMismatch
         case manifestNotSaved(String)
+        case downloadIncomplete
     }
 
     public let kind: Kind
@@ -38,6 +39,8 @@ public struct BackupError: LocalizedError, Equatable, Sendable {
             String(localized: "The existing manifest does not match this backup; no files were changed.")
         case .manifestNotSaved(let detail):
             String(localized: "Files were copied, but the manifest could not be saved: \(detail)")
+        case .downloadIncomplete:
+            String(localized: "The file read from the device is incomplete; run the backup again.")
         }
     }
 }
@@ -46,10 +49,18 @@ public struct PlannedFile: Sendable, Hashable {
     /// Path relative to the source folder, using "/" separators.
     public let relativePath: String
     public let size: Int64
+
+    public init(relativePath: String, size: Int64) {
+        self.relativePath = relativePath
+        self.size = size
+    }
 }
 
 public struct BackupPlan: Sendable {
-    public let sourceDirectory: URL
+    /// Name stored in the manifest: the source folder's name, or the device name.
+    public let sourceName: String
+    /// The source folder, or nil when the files come from a connected device.
+    public let sourceDirectory: URL?
     public let backupDirectory: URL
     public let files: [PlannedFile]
     public let totalBytes: Int64
@@ -77,6 +88,8 @@ public enum BackupEngine {
     public static let manifestName = ".phone-photo-backup.json"
     public static let schemaVersion = 1
     static let chunkSize = 1 << 20
+    /// Larger writes for copies: external exFAT drives are much faster with big sequential writes.
+    static let copyChunkSize = 8 << 20
 
     // MARK: Planning
 
@@ -106,6 +119,7 @@ public enum BackupEngine {
             return a == b ? $0.relativePath < $1.relativePath : a < b
         }
         return BackupPlan(
+            sourceName: sourceName,
             sourceDirectory: URL(fileURLWithPath: sourcePath, isDirectory: true),
             backupDirectory: URL(fileURLWithPath: backupPath, isDirectory: true),
             files: found,
@@ -150,11 +164,11 @@ public enum BackupEngine {
         isCancelled: @Sendable () -> Bool = { false },
         progress: BackupProgress? = nil
     ) throws -> BackupReport {
-        let sourceDir = plan.sourceDirectory.path
+        guard let sourceDir = plan.sourceDirectory?.path else { throw BackupError(.sourceMissing) }
         let backupDir = plan.backupDirectory.path
         try FileManager.default.createDirectory(atPath: backupDir, withIntermediateDirectories: true)
         let manifestPath = (backupDir as NSString).appendingPathComponent(manifestName)
-        var manifest = try Manifest.load(from: manifestPath, sourceName: plan.sourceDirectory.lastPathComponent)
+        var manifest = try Manifest.load(from: manifestPath, sourceName: plan.sourceName)
         var report = BackupReport(backupDirectory: plan.backupDirectory)
         let total = plan.files.count
 
@@ -187,24 +201,15 @@ public enum BackupEngine {
                 }
                 if outcome == .copied { report.copied += 1 } else { report.unchanged += 1 }
 
-                let backupRelative = String(target.dropFirst(backupDir.count + 1))
-                let now = Date.now.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
-                var versions = manifest.files[file.relativePath] ?? []
-                if let index = versions.firstIndex(where: { $0.sha256 == digest }) {
-                    versions[index].lastSeen = now
-                    versions[index].backupPath = backupRelative
-                } else {
-                    versions.append(.init(sha256: digest, sizeBytes: before.size, backupPath: backupRelative,
-                                          firstSeen: now, lastSeen: now))
-                }
-                manifest.files[file.relativePath] = versions
+                manifest.record(file.relativePath, sha256: digest, size: before.size,
+                                backupPath: String(target.dropFirst(backupDir.count + 1)))
             } catch {
                 report.errors.append("\(file.relativePath): \(error.localizedDescription)")
             }
             progress?(offset + 1, total, file, outcome)
         }
 
-        manifest.updatedAt = Date.now.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+        manifest.updatedAt = Manifest.timestamp()
         do {
             try manifest.write(to: manifestPath)
         } catch {
@@ -225,11 +230,11 @@ public enum BackupEngine {
         return hex(hasher.finalize())
     }
 
-    private static func hex(_ digest: SHA256.Digest) -> String {
+    static func hex(_ digest: SHA256.Digest) -> String {
         digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func existsAsSameFile(_ path: String, digest: String) throws -> Bool {
+    static func existsAsSameFile(_ path: String, digest: String) throws -> Bool {
         guard let info = try FS.lstatIfExists(path), FS.isRegularFile(info) else { return false }
         return try sha256(of: path) == digest
     }
@@ -253,7 +258,7 @@ public enum BackupEngine {
         }
     }
 
-    private static func copyVerified(from source: String, to target: String, expectedHash: String, expected: FileSnapshot) throws {
+    static func copyVerified(from source: String, to target: String, expectedHash: String, expected: FileSnapshot) throws {
         let directory = (target as NSString).deletingLastPathComponent
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let name = (target as NSString).lastPathComponent
@@ -263,7 +268,7 @@ public enum BackupEngine {
             let reader = try FileHandle(forReadingFrom: URL(fileURLWithPath: source))
             defer { try? reader.close() }
             var hasher = SHA256()
-            while let chunk = try reader.read(upToCount: chunkSize), !chunk.isEmpty {
+            while let chunk = try reader.read(upToCount: copyChunkSize), !chunk.isEmpty {
                 try writer.write(contentsOf: chunk)
                 hasher.update(data: chunk)
             }
