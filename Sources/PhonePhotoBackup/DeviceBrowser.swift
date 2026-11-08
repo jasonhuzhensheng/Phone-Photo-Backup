@@ -59,6 +59,8 @@ final class DeviceBrowser: NSObject {
     @ObservationIgnored private var lastOpen: [String: Date] = [:]
     @ObservationIgnored private var lastRestart: [String: Date] = [:]
     @ObservationIgnored private var progress: [String: (count: Int, since: Date)] = [:]
+    /// Devices whose current session has delivered a complete file list.
+    @ObservationIgnored private var catalogComplete: Set<String> = []
 
     func device(_ id: String) -> Device? { devices.first { $0.id == id } }
 
@@ -272,6 +274,7 @@ final class DeviceBrowser: NSObject {
         guard !device.hasOpenSession, !opening.contains(id) else { return }
         opening.insert(id)
         lastOpen[id] = Date()
+        catalogComplete.remove(id)
         device.requestOpenSession()
     }
 
@@ -380,6 +383,7 @@ final class DeviceBrowser: NSObject {
         let id = Self.identifier(device)
         guard cameras[id] === device else { return }
         Self.log.info("session closed")
+        catalogComplete.remove(id)
         catalogs[id] = nil
         opening.remove(id)
         let locked = (device as? ICCameraDevice)?.isAccessRestrictedAppleDevice ?? false
@@ -502,15 +506,29 @@ extension DeviceBrowser: ICCameraDeviceDelegate {
     nonisolated func cameraDevice(_ camera: ICCameraDevice, didReceivePTPEvent eventData: Data) {}
 
     nonisolated func deviceDidBecomeReady(withCompleteContentCatalog device: ICCameraDevice) {
-        onMain { self.refresh(device, catalogComplete: true) }
+        onMain {
+            Self.log.info("file list complete: \(device.mediaFiles?.count ?? 0) files")
+            self.catalogComplete.insert(Self.identifier(device))
+            self.refresh(device, catalogComplete: true)
+        }
     }
 
     nonisolated func cameraDeviceDidRemoveAccessRestriction(_ device: ICDevice) {
         onMain {
             // Unlocked and trusted. Start a fresh session so the complete file list is read again;
             // file objects from before the lock may no longer work.
-            Self.log.info("access restriction removed")
-            self.restartSession(device, force: true)
+            let id = Self.identifier(device)
+            if self.catalogComplete.contains(id) {
+                // Unlocked again after a lock during this session: file objects from before the
+                // lock may no longer work, so read the file list again with a fresh session.
+                Self.log.info("access restriction removed after a lock; restarting session")
+                self.restartSession(device, force: true)
+            } else {
+                // Part of opening a session: an iPhone reports "please unlock" and then lifts the
+                // restriction right away. Keep the session and wait for the file list.
+                Self.log.info("access restriction removed; waiting for the file list")
+                self.refresh(device)
+            }
         }
     }
 
