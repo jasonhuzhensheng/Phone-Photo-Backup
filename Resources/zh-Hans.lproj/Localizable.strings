@@ -210,3 +210,36 @@
 "Delete the selected items, then import?" = "删除所选项目后再导入？";
 "Delete, Then Import" = "删除后导入";
 "%@ items (%@) are not imported. Those already in Photos are moved to Recently Deleted now and can be recovered there for 30 days; there is no backup copy. Those not in Photos stay on the phone; delete them there if you don't want them. Later imports of this phone leave them out too. Then the rest of the phone is imported into Photos." = "%1$@ 项（%2$@）不会导入。其中已在“照片”里的现在移到“最近删除”，30 天内可以恢复，但没有备份副本。不在“照片”里的仍留在手机上，不想要的话请在手机上删除。以后导入这部手机时也会跳过它们。然后把手机上的其余内容导入“照片”。";
+
+/* Version and updates */
+"Check for Updates…" = "检查更新…";
+"Check for Updates Automatically" = "自动检查更新";
+"Check for updates automatically" = "自动检查更新";
+"Version %@" = "版本 %@";
+"Build %@" = "构建号 %@";
+"Update to %@" = "更新到 %@";
+"Current version: %@ (%@)" = "当前版本：%1$@（%2$@）";
+"Checking for updates…" = "正在检查更新…";
+"Phone Photo Backup is up to date" = "手机照片备份已是最新版本";
+"Version %@ is available" = "有新版本 %@";
+"Downloading version %@…" = "正在下载版本 %@…";
+"Installing version %@…" = "正在安装版本 %@…";
+"Update problem" = "更新出错";
+"You have the latest version." = "你用的是最新版本。";
+"Finish or stop the current backup or import first." = "请先等当前的备份或导入完成，或者停止它。";
+"This release has no checksum, so it cannot be installed automatically. Open the release page to download it." = "这个版本没有提供校验值，不能自动安装。请打开发布页面下载。";
+"The app downloads the new version, checks it and restarts. Your settings and backups are kept." = "程序会下载新版本、核对无误后重启。你的设置和备份都会保留。";
+"Checking the download and restarting…" = "正在核对下载内容并重启…";
+"No release notes." = "没有更新说明。";
+"Release Page" = "发布页面";
+"Later" = "以后再说";
+"Open Release Page" = "打开发布页面";
+"Install and Restart" = "安装并重启";
+"Updates work only in the installed app." = "只有安装好的应用才能更新。";
+"Could not check for updates: %@" = "无法检查更新：%@";
+"This app's folder (%@) cannot be changed. Download the new version from the release page instead." = "无法修改应用所在的文件夹（%@）。请从发布页面下载新版本。";
+"The downloaded update is damaged (SHA-256 does not match). Nothing was changed." = "下载的更新已损坏（SHA-256 不一致），没有做任何改动。";
+"The downloaded update does not contain the app. Nothing was changed." = "下载的更新里没有应用，没有做任何改动。";
+"The downloaded update is a different app (%@). Nothing was changed." = "下载的更新是另一个应用（%@），没有做任何改动。";
+"The downloaded update has version %@, not the one offered. Nothing was changed." = "下载的更新版本是 %@，与提示的版本不同，没有做任何改动。";
+"The downloaded app's code signature is not valid. Nothing was changed." = "下载的应用代码签名无效，没有做任何改动。";

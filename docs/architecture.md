@@ -24,6 +24,8 @@
 | `Sources/PhonePhotoBackup/BackupModel.swift` | `@MainActor @Observable` 状态：来源（文件夹或设备）选择与记忆、新接入的手机自动设为来源、自动模式（接入即扫描 → 备份 → 导入，每台手机每次启动只自动运行一次）、扫描/备份/导入任务、进度、取消、防休眠 | 在后台任务中调用引擎 |
 | `Sources/PhonePhotoBackup/ContentView.swift` | SwiftUI 界面：来源行（菜单列出已连接手机或选择文件夹，支持拖放）、手机状态、状态面板、确认对话框、结果与错误列表 | 不含文件操作逻辑 |
 | `Sources/PhonePhotoBackup/PhonePhotoBackupApp.swift` | 应用入口、单窗口、菜单与快捷键 | — |
+| `Sources/BackupCore/AppUpdate.swift` | 版本号比较、解析 GitHub `releases/latest`、选出 `Phone-Photo-Backup-<版本>.zip` 及其 SHA-256（GitHub 的 `digest`，或发布说明里的 `SHA-256:` 行）；校验并解压下载（SHA-256、包标识、版本、`codesign --verify --strict --deep`）；生成替换脚本（等旧进程退出 → 旧包移开 → 新包移入，失败放回 → 重新打开 → 清理） | 不联网；只在临时目录和应用所在位置操作 |
+| `Sources/PhonePhotoBackup/Updater.swift` | 检查更新（启动时每天最多一次，可关闭；菜单“检查更新…”）、更新窗口、下载进度、调用核心校验、启动替换脚本后退出 | 只在用户点“安装并重启”且没有备份或导入进行时安装；自检模式和无 bundle 运行时不检查 |
 | `Sources/PhonePhotoBackup/SelfCheck.swift` | 开发自检：设置 `PPB_SNAPSHOT_DIR` 时自动运行流程并保存窗口截图 | 默认不启用 |
 | `Resources/`、`scripts/` | Info.plist、en/zh-Hans 本地化；打包 `.app`、生成图标 | — |
 | `Tests/BackupCoreTests/` | 用临时模拟字节测试复制、跳过、冲突、清单、重叠路径、符号链接、元数据、取消；用模拟设备测试设备来源的复制、免重读、冲突、下载不完整/失败、取消与继续、路径清理 | 不访问私人照片或真实设备 |
@@ -44,4 +46,4 @@
 
 ## 安全与限制
 
-来源与实际备份目录不得相互嵌套。失败时保留原件并清理未完成的临时文件。用户可随时停止；已完成的文件写入清单，再次运行即继续。当前没有恢复、加密或安卓 MTP 支持；「照片」只做导入，不读取图库内容做备份。设备来源无法像文件夹那样对源文件重读校验：完整性依靠 ImageCaptureCore 的下载结果、与设备报告大小一致的检查，以及写盘后计算并记录的 SHA-256。目的盘的可靠性、容量和加密由用户负责。应用为 ad-hoc 签名，未经 Apple 公证。
+来源与实际备份目录不得相互嵌套。失败时保留原件并清理未完成的临时文件。用户可随时停止；已完成的文件写入清单，再次运行即继续。当前没有恢复、加密或安卓 MTP 支持；「照片」只做导入，不读取图库内容做备份。设备来源无法像文件夹那样对源文件重读校验：完整性依靠 ImageCaptureCore 的下载结果、与设备报告大小一致的检查，以及写盘后计算并记录的 SHA-256。目的盘的可靠性、容量和加密由用户负责。应用为 ad-hoc 签名，未经 Apple 公证。唯一的网络请求是检查更新（`api.github.com`）和下载更新包；更新的可信度依靠 HTTPS 和 GitHub 发布页给出的 SHA-256，ad-hoc 签名只能证明包未被改动，不能证明来源。

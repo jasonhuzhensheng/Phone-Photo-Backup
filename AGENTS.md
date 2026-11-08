@@ -45,9 +45,10 @@ git diff --check
 ```sh
 swift test                      # 运行测试
 scripts/build-app.sh            # 打包 build/Phone Photo Backup.app
+scripts/release.sh [说明文件]   # 发布 GitHub Release（先改 Info.plist 版本号、提交并推送；对外发布，需用户同意）
 swift run PhonePhotoBackup      # 开发时无 bundle 启动（英文界面）
 ```
 
 界面状态写法：跨视图共享的状态放在 `BackupModel`（`@Observable`），视图私有的状态（拖放高亮、展开/折叠等）用标准 `@State`；应用入口用 `@State` 持有模型并通过 `.environment` 下发。新增界面文字时同步更新 `Resources/zh-Hans.lproj/Localizable.strings`。
 
-`PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份（可用启动参数 `-sourcePath <目录> -destinationPath <目录>` 临时指定，不改动用户保存的设置）、把主窗口和“备份里的视频”窗口的截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用；此模式下不搜索手机、不导入「照片」、不自动开始、不打开检查清单也不删除任何项目，避免误读真实手机或往真实图库写入测试文件。PhotoKit 导入和删除只能由用户在自己的图库上验收。测试必须使用临时模拟文件，不读取真实照片；手机直连的引擎逻辑用 `StagedBackupTests` 里的模拟设备测试，真机流程需由用户手动验收。
+`PPB_SNAPSHOT_DIR=<目录>` 环境变量会让应用对已保存的文件夹自动扫描并备份（可用启动参数 `-sourcePath <目录> -destinationPath <目录>` 临时指定，不改动用户保存的设置）、把主窗口和“备份里的视频”窗口的截图写入该目录后退出，仅用于开发自检，且只能对临时模拟文件使用；此模式下不搜索手机、不导入「照片」、不自动开始、不打开检查清单也不删除任何项目，避免误读真实手机或往真实图库写入测试文件。PhotoKit 导入和删除只能由用户在自己的图库上验收。测试自动更新不要发布真实版本：用 `PPB_UPDATE_FEED=file://<本地 JSON>`（可加 `PPB_UPDATE_AUTOINSTALL=1`）对临时目录里的应用副本测试，测试后删除默认设置里的 `lastUpdateCheck`。测试必须使用临时模拟文件，不读取真实照片；手机直连的引擎逻辑用 `StagedBackupTests` 里的模拟设备测试，真机流程需由用户手动验收。

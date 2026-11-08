@@ -5,14 +5,20 @@ import SwiftUI
 struct PhonePhotoBackupApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model = BackupModel()
+    @State private var updater = Updater()
 
     var body: some Scene {
         Window("Phone Photo Backup", id: "main") {
             ContentView()
                 .environment(model)
+                .environment(updater)
         }
         .windowResizability(.contentMinSize)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updater.check(userInitiated: true) }
+                Toggle("Check for Updates Automatically", isOn: $updater.checksAutomatically)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Choose Source Folder…") { model.chooseSource() }
                     .keyboardShortcut("o")

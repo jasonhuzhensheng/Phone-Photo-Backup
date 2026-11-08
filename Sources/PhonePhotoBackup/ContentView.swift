@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(BackupModel.self) private var model
+    @Environment(Updater.self) private var updater
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -29,6 +30,11 @@ struct ContentView: View {
         .frame(minWidth: 620, idealWidth: 680, minHeight: 540)
         .task {
             SelfCheck.runIfRequested(model: model) { openWindow(id: BackupVideosView.windowID) }
+            updater.checkAutomaticallyIfDue()
+        }
+        .sheet(isPresented: Binding(get: { updater.showingWindow && model.review == nil },
+                                    set: { if !$0 { updater.later() } })) {
+            UpdateSheet(updater: updater).environment(model)
         }
         .alert("Backup error", isPresented: Binding(get: { model.alertMessage != nil },
                                                    set: { if !$0 { model.alertMessage = nil } })) {
@@ -90,7 +96,18 @@ struct ContentView: View {
                 .foregroundStyle(.tint)
                 .frame(width: 48)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Phone Photo Backup").font(.title2.weight(.semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Phone Photo Backup").font(.title2.weight(.semibold))
+                    Text("Version \(Updater.currentVersionText)")
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .help("Build \(Updater.currentBuildText)")
+                    if let offer = updater.availableOffer {
+                        Button("Update to \(offer.version.description)") { updater.showingWindow = true }
+                            .controlSize(.small)
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
                 Text("Copies every file and verifies it with SHA-256. Originals are never changed or deleted; re-running skips unchanged files.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
