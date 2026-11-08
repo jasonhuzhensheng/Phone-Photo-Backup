@@ -89,15 +89,26 @@ public enum PhoneReview {
         guard let manifest = try? Manifest.read(from: manifestPath) else { return ([], items) }
         var safe: [PhoneItem] = [], missing: [PhoneItem] = []
         for item in items {
-            let found = (manifest.files[item.relativePath] ?? []).contains { version in
-                guard version.sizeBytes == item.size else { return false }
-                let path = (backupDirectory.path as NSString).appendingPathComponent(version.backupPath)
-                guard let info = try? FS.lstatIfExists(path), FS.isRegularFile(info) else { return false }
-                return Int64(info.st_size) == item.size
-            }
-            if found { safe.append(item) } else { missing.append(item) }
+            if copy(of: item, manifest: manifest, in: backupDirectory) != nil { safe.append(item) } else { missing.append(item) }
         }
         return (safe, missing)
+    }
+
+    /// The complete backup copy of `item` in `backupDirectory`, if there is one. Used to preview a
+    /// video from the disk instead of streaming it from the phone.
+    public static func backupCopy(of item: PhoneItem, in backupDirectory: URL) -> URL? {
+        let manifestPath = backupDirectory.appendingPathComponent(BackupEngine.manifestName).path
+        guard let manifest = try? Manifest.read(from: manifestPath) else { return nil }
+        return copy(of: item, manifest: manifest, in: backupDirectory)
+    }
+
+    private static func copy(of item: PhoneItem, manifest: Manifest, in backupDirectory: URL) -> URL? {
+        for version in (manifest.files[item.relativePath] ?? []).reversed() where version.sizeBytes == item.size {
+            let path = (backupDirectory.path as NSString).appendingPathComponent(version.backupPath)
+            guard let info = try? FS.lstatIfExists(path), FS.isRegularFile(info), Int64(info.st_size) == item.size else { continue }
+            return URL(fileURLWithPath: path)
+        }
+        return nil
     }
 
     /// SHA-256 of each item's backup copy (the manifest version with the same size), by path.

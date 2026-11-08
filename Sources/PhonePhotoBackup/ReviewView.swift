@@ -65,21 +65,33 @@ final class ReviewSession {
         }
     }
 
+    /// Every listed item once, in list order: the largest videos, then the duplicates.
+    var previewItems: [PhoneItem] {
+        var seen: Set<String> = []
+        return (largeVideos + duplicates.flatMap(\.files)).filter { seen.insert($0.relativePath).inserted }
+    }
+
     func isWholeGroupSelected(_ group: DuplicateGroup) -> Bool {
         group.files.allSatisfy { selected.contains($0.relativePath) }
     }
+}
+
+/// The item a preview opens on.
+struct PreviewTarget: Identifiable {
+    let id: String
 }
 
 struct ReviewSheet: View {
     @Environment(BackupModel.self) private var model
     @Bindable var review: ReviewSession
     @State private var confirmingDelete = false
+    @State private var previewing: PreviewTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Review before backup").font(.title2.weight(.semibold))
-                Text("Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too.")
+                Text("Click a picture to watch the video or see the photo full size. Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -91,7 +103,7 @@ struct ReviewSheet: View {
                         Text("No videos larger than 50 MB.").foregroundStyle(.secondary)
                     }
                     ForEach(review.largeVideos) { item in
-                        ItemRow(item: item, review: review, note: nil)
+                        ItemRow(item: item, review: review, note: nil, preview: preview)
                     }
                 } header: {
                     Text("Largest videos")
@@ -115,7 +127,7 @@ struct ReviewSheet: View {
                     ForEach(review.duplicates) { group in
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(Array(group.files.enumerated()), id: \.element.id) { index, item in
-                                ItemRow(item: item, review: review, note: index == 0 ? "Oldest copy" : nil)
+                                ItemRow(item: item, review: review, note: index == 0 ? "Oldest copy" : nil, preview: preview)
                             }
                             if review.isWholeGroupSelected(group) {
                                 Label("Every copy in this group is selected.", systemImage: "exclamationmark.triangle")
@@ -148,7 +160,14 @@ struct ReviewSheet: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 720, idealWidth: 760, minHeight: 600)
+        .frame(minWidth: 760, idealWidth: 860, minHeight: 640)
+        .sheet(item: $previewing) { target in
+            let items = review.previewItems
+            MediaPreviewSheet(review: review, items: items,
+                              index: items.firstIndex { $0.relativePath == target.id } ?? 0,
+                              backupDirectory: model.plan?.backupDirectory)
+                .environment(model)
+        }
         .confirmationDialog("Delete the selected items?", isPresented: $confirmingDelete) {
             Button("Back Up, Then Delete", role: .destructive) { model.finishReview(delete: true) }
             Button("Cancel", role: .cancel) {}
@@ -160,6 +179,10 @@ struct ReviewSheet: View {
             }
         }
     }
+
+    private func preview(_ item: PhoneItem) {
+        previewing = PreviewTarget(id: item.relativePath)
+    }
 }
 
 private struct ItemRow: View {
@@ -167,6 +190,7 @@ private struct ItemRow: View {
     let item: PhoneItem
     @Bindable var review: ReviewSession
     let note: LocalizedStringKey?
+    let preview: (PhoneItem) -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -177,26 +201,39 @@ private struct ItemRow: View {
             .labelsHidden()
             .toggleStyle(.checkbox)
 
-            Group {
-                if let image = review.thumbnails[item.relativePath] {
-                    Image(nsImage: image).resizable().scaledToFill()
-                } else {
-                    Image(systemName: item.isVideo ? "video" : "photo").foregroundStyle(.secondary)
+            Button { preview(item) } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6).fill(.quaternary)
+                    if let image = review.thumbnails[item.relativePath] {
+                        Image(nsImage: image).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: item.isVideo ? "video" : "photo")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if item.isVideo {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 30))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .black.opacity(0.45))
+                    }
                 }
+                .frame(width: 160, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
             }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-            .background(RoundedRectangle(cornerRadius: 4).fill(.quaternary))
+            .buttonStyle(.plain)
+            .help(item.isVideo ? "Play this video" : "Show this photo full size")
             .onAppear { review.loadThumbnail(item.relativePath, devices: model.devices) }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(verbatim: item.filename).font(.callout)
+                    Text(verbatim: item.filename).font(.body.weight(.medium))
                     if let note {
                         Text(note).font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text(verbatim: details)
+                Text(verbatim: item.reviewDetails)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -204,17 +241,8 @@ private struct ItemRow: View {
             }
             Spacer()
             Text(verbatim: ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file))
-                .font(.callout.monospacedDigit())
+                .font(.body.monospacedDigit())
         }
-    }
-
-    private var details: String {
-        var parts: [String] = []
-        if let date = item.date { parts.append(date.formatted(date: .abbreviated, time: .shortened)) }
-        if let duration = item.duration {
-            parts.append(Duration.seconds(duration).formatted(.time(pattern: duration >= 3600 ? .hourMinuteSecond : .minuteSecond)))
-        }
-        parts.append((item.relativePath as NSString).deletingLastPathComponent)
-        return parts.joined(separator: " · ")
+        .padding(.vertical, 2)
     }
 }

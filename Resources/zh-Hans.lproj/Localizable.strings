@@ -104,7 +104,7 @@
 
 /* Review before backup */
 "Review before backup" = "备份前检查";
-"Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too." = "选择要删除的项目。备份完成后，所选项目会在“照片”中删除并进入“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
+"Click a picture to watch the video or see the photo full size. Pick what to delete. After the backup, the selected items are deleted in Photos and go to Recently Deleted, where they can be recovered for 30 days. iCloud Photos then removes them from the phone too." = "点按图片可以播放视频或查看大图。选择要删除的项目。备份完成后，所选项目会在“照片”中删除并进入“最近删除”，30 天内可以恢复；iCloud 照片随后也会把它们从手机上删除。";
 "No videos larger than 50 MB." = "没有大于 50 MB 的视频。";
 "Largest videos" = "最占空间的视频";
 "Looking for duplicates… %@ of %@" = "正在查找重复项… %1$@ / %2$@";
@@ -127,3 +127,23 @@
 "Show items that were not deleted" = "显示未删除的项目";
 "No verified backup copy:" = "没有经核对的备份：";
 "Not found in Photos (delete these on the phone yourself):" = "在“照片”里找不到（请在手机上自行删除）：";
+
+/* Preview */
+"Play this video" = "播放这个视频";
+"Show this photo full size" = "查看大图";
+"%@ of %@" = "%1$@ / %2$@";
+"Previous (⌘←)" = "上一个（⌘←）";
+"Next (⌘→)" = "下一个（⌘→）";
+"Will be deleted" = "将删除";
+"Will be kept" = "保留";
+"Keep" = "保留";
+"Delete" = "删除";
+"Done" = "完成";
+"Keep this item and show the next one (⌘K)" = "保留这一项，并显示下一个（⌘K）";
+"Mark this item for deletion and show the next one (⌘⌫)" = "标记删除这一项，并显示下一个（⌘⌫）";
+"Showing the backup copy on this Mac." = "正在显示这台 Mac 上的备份副本。";
+"Playing straight from the phone. Large videos may pause while loading; keep the phone unlocked." = "正在直接从手机播放。大视频可能会停下来加载，请保持手机解锁。";
+"Read from the phone." = "从手机读取。";
+"Loading from the phone…" = "正在从手机读取…";
+"The preview could not be loaded. You can still decide from the details above." = "无法加载预览。仍可根据上方的信息决定。";
+"This file cannot be shown as an image." = "这个文件无法显示为图片。";

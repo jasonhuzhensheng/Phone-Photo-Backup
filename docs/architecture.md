@@ -14,9 +14,10 @@
 | `Sources/BackupCore/PhoneReview.swift` | 备份前检查：最大的视频、完全相同的重复项（先按大小筛选候选，再由注入的哈希函数确认）、删除前核对备份（清单中同大小版本且副本存在）、取得备份副本的 SHA-256 | 纯逻辑，不删除任何东西 |
 | `Sources/BackupCore/Manifest.swift` | 读写 `.phone-photo-backup.json`（schema 1，与旧 Python 版兼容） | 原子写入；无法读取或不匹配时在复制前中止 |
 | `Sources/BackupCore/FileSystem.swift` | POSIX 辅助：`lstat`、排他创建、排他发布、元数据复制 | 不跟随符号链接 |
-| `Sources/PhonePhotoBackup/DeviceBrowser.swift` | ImageCaptureCore：发现 USB 设备、打开会话、读取完整文件列表（含 Live Photo 视频等附属文件）、下载单个文件；手机锁定或断开时等待恢复并重读列表 | 只读设备；不删除、不上传 |
+| `Sources/PhonePhotoBackup/DeviceBrowser.swift` | ImageCaptureCore：发现 USB 设备、打开会话、读取完整文件列表（含 Live Photo 视频等附属文件）、下载单个文件、按范围读取文件片段（预览、查重）、请求指定尺寸的缩略图；手机锁定或断开时等待恢复并重读列表 | 只读设备；不删除、不上传 |
 | `Sources/PhonePhotoBackup/PhotoLibraryImporter.swift` | PhotoKit：申请读写权限、读取图库已有项目的文件名与创建时间、读取备份文件的拍摄时间（EXIF/视频元数据，缺失时用文件时间）、创建照片/视频/实况照片并加入“从旧手机导入”相簿；实况照片配对失败时分开导入 | 只添加，不修改或删除图库中已有项目；`shouldMoveFile = false`，备份文件保持不动 |
 | `Sources/PhonePhotoBackup/ReviewView.swift` | 检查清单窗口：`ReviewSession` 计算大视频和重复项（从手机分块读取计算 SHA-256）、缩略图、勾选；默认勾选重复组中除最早一份外的副本 | 只做选择；删除由模型在备份后经「照片」执行 |
+| `Sources/PhonePhotoBackup/MediaPreview.swift` | 检查清单里的大图/视频预览：有备份副本时播放副本；否则 `PhoneStreamLoader`（`AVAssetResourceLoaderDelegate`）按播放器请求的字节范围从手机分块读取，不先复制整个文件；照片整份读入内存显示；“保留/删除”按钮修改勾选并跳到下一项 | 只读手机和备份；不写临时文件 |
 | `Sources/PhonePhotoBackup/BackupModel.swift` | `@MainActor @Observable` 状态：来源（文件夹或设备）选择与记忆、新接入的手机自动设为来源、自动模式（接入即扫描 → 备份 → 导入，每台手机每次启动只自动运行一次）、扫描/备份/导入任务、进度、取消、防休眠 | 在后台任务中调用引擎 |
 | `Sources/PhonePhotoBackup/ContentView.swift` | SwiftUI 界面：来源行（菜单列出已连接手机或选择文件夹，支持拖放）、手机状态、状态面板、确认对话框、结果与错误列表 | 不含文件操作逻辑 |
 | `Sources/PhonePhotoBackup/PhonePhotoBackupApp.swift` | 应用入口、单窗口、菜单与快捷键 | — |

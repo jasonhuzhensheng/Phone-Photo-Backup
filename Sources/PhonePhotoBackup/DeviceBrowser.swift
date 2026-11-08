@@ -152,11 +152,21 @@ final class DeviceBrowser: NSObject {
         return hasher.finalize()
     }
 
-    /// A small preview image of a file on the phone.
-    func thumbnail(deviceID: String, path: String) async -> NSImage? {
+    /// A preview image of a file on the phone, at most `maxPixelSize` pixels wide or high.
+    func thumbnail(deviceID: String, path: String, maxPixelSize: Int = 480) async -> NSImage? {
         guard let file = catalogs[deviceID]?[path],
-              let data = try? await file.requestThumbnailData(options: nil) else { return nil }
+              let data = try? await file.requestThumbnailData(options: [.imageSourceThumbnailMaxPixelSize: maxPixelSize])
+        else { return nil }
         return NSImage(data: data)
+    }
+
+    /// Reads part of a file on the phone, so a video can be previewed without downloading it.
+    /// Waits while the phone is locked or reconnecting, like a download.
+    func readData(deviceID: String, path: String, offset: Int64, length: Int) async throws -> Data {
+        let file = try await availableFile(deviceID: deviceID, path: path)
+        let data = try await file.requestReadData(atOffset: off_t(offset), length: off_t(length))
+        guard !data.isEmpty || length == 0 else { throw BackupError(.downloadIncomplete) }
+        return data
     }
 
     // MARK: Downloading

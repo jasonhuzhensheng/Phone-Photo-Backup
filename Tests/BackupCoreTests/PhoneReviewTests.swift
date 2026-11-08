@@ -51,9 +51,14 @@ import Testing
         #expect(hashes.count == 1)
         #expect(hashes[backedUp.relativePath]?.count == 64)
 
+        let copy = try #require(PhoneReview.backupCopy(of: backedUp, in: report.backupDirectory))
+        #expect(try Data(contentsOf: copy) == Data("simulated heic".utf8))
+        #expect(PhoneReview.backupCopy(of: wrongSize, in: report.backupDirectory) == nil)
+
         // A backup copy that has gone missing is no longer a reason to allow deletion.
         try FileManager.default.removeItem(at: report.backupDirectory.appendingPathComponent(backedUp.relativePath))
         result = PhoneReview.backedUp([backedUp], in: report.backupDirectory)
         #expect(result.safe.isEmpty)
+        #expect(PhoneReview.backupCopy(of: backedUp, in: report.backupDirectory) == nil)
     }
 }
