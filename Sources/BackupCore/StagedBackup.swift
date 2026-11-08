@@ -24,8 +24,10 @@ extension BackupEngine {
     /// Plans a backup of files listed by a device. The backup folder is `<device name>_backup`.
     /// Phones often share a name ("iPhone"), so each folder is tied to one device: a folder that
     /// belongs to another device, or to a folder backup, is never reused; `<name> 2_backup`,
-    /// `<name> 3_backup`… are used instead.
-    public static func makeDevicePlan(deviceName: String, deviceID: String, files: [PlannedFile], destination: URL) -> BackupPlan {
+    /// `<name> 3_backup`… are used instead. Other backups on the destination and `references`
+    /// are indexed so files already stored there are not stored again.
+    public static func makeDevicePlan(deviceName: String, deviceID: String, files: [PlannedFile], destination: URL,
+                                      references: [URL] = []) -> BackupPlan {
         let destinationPath = FS.canonicalPath(destination.path)
         let (name, backupPath) = deviceFolder(name: safeFolderName(deviceName), id: deviceID, in: destinationPath)
         var seen = Set<String>()
@@ -39,7 +41,9 @@ extension BackupEngine {
             sourceDirectory: nil,
             backupDirectory: URL(fileURLWithPath: backupPath, isDirectory: true),
             files: sorted,
-            totalBytes: sorted.reduce(0) { $0 + $1.size }
+            totalBytes: sorted.reduce(0) { $0 + $1.size },
+            existing: ExistingBackups.load(destination: destinationPath, excluding: name + "_backup",
+                                           references: references)
         )
         plan.deviceID = deviceID
         return plan
@@ -106,6 +110,7 @@ extension BackupEngine {
         let sameVolume = (try? FS.lstatInfo(staging.path).st_dev) == (try? FS.lstatInfo(backupDir).st_dev)
 
         var report = BackupReport(backupDirectory: plan.backupDirectory)
+        var stored = manifest.storedPathsByDigest()
         let total = plan.files.count
 
         for (offset, file) in plan.files.enumerated() {
@@ -123,9 +128,9 @@ extension BackupEngine {
                     defer { unlink(downloaded) } // no-op once the file has been moved into place
                     guard FS.contains(staging.path, downloaded) else { throw BackupError(.downloadIncomplete) }
                     outcome = try place(downloaded, as: file, backupDir: backupDir, sameVolume: sameVolume,
-                                        manifest: &manifest, report: &report)
+                                        existing: plan.existing, stored: &stored, manifest: &manifest, report: &report)
                 }
-                if outcome == .copied { report.copied += 1 } else { report.unchanged += 1 }
+                report.count(outcome, size: file.size)
             } catch {
                 if error is CancellationError || isCancelled() {
                     report.cancelled = true
@@ -173,7 +178,7 @@ extension BackupEngine {
     /// Verifies a fetched file and moves or copies it to its place in the backup folder.
     private static func place(
         _ downloaded: String, as file: PlannedFile, backupDir: String, sameVolume: Bool,
-        manifest: inout Manifest, report: inout BackupReport
+        existing: ExistingBackups, stored: inout [String: String], manifest: inout Manifest, report: inout BackupReport
     ) throws -> FileOutcome {
         let info = try FS.lstatInfo(downloaded)
         let size = Int64(info.st_size)
@@ -183,7 +188,17 @@ extension BackupEngine {
 
         var target = (backupDir as NSString).appendingPathComponent(file.relativePath)
         var outcome = FileOutcome.unchanged
-        if try !existsAsSameFile(target, digest: digest) {
+        if try existsAsSameFile(target, digest: digest) {
+            // already in this backup
+        } else if let own = storedCopy(stored[digest], in: backupDir, size: size) {
+            // Already recorded under another path (the phone renamed a folder, or two names share
+            // the same bytes). A "../other_backup/…" path means it lives in another backup.
+            target = own
+            if stored[digest]!.hasPrefix("../") { outcome = .duplicate }
+        } else if let copy = existing.copy(withDigest: digest, size: size) {
+            target = copy
+            outcome = .duplicate
+        } else {
             if try FS.lstatIfExists(target) != nil {
                 target = try conflictPath(for: target, digest: digest)
             }
@@ -196,11 +211,11 @@ extension BackupEngine {
                     try copyVerified(from: downloaded, to: target, expectedHash: digest, expected: FileSnapshot(info))
                 }
                 outcome = .copied
-                report.bytesCopied += size
             }
         }
-        manifest.record(file.relativePath, sha256: digest, size: size,
-                        backupPath: String(target.dropFirst(backupDir.count + 1)))
+        let backupRelative = relativePath(of: target, from: backupDir)
+        manifest.record(file.relativePath, sha256: digest, size: size, backupPath: backupRelative)
+        if stored[digest] == nil { stored[digest] = backupRelative }
         return outcome
     }
 }

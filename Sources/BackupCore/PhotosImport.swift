@@ -149,7 +149,8 @@ public enum PhotosImport {
             let versions = manifest.files.values.flatMap { $0 }.sorted { $0.backupPath < $1.backupPath }
             for version in versions {
                 guard isMedia(version.backupPath) else { other += 1; continue }
-                let url = folder.appendingPathComponent(version.backupPath)
+                // Copies stored by another backup are recorded as "../other_backup/…".
+                let url = folder.appendingPathComponent(version.backupPath).standardizedFileURL
                 guard let info = try? FS.lstatIfExists(url.path), FS.isRegularFile(info),
                       Int64(info.st_size) == version.sizeBytes else { continue } // missing or changed copy
                 if ledger.contains(version.sha256) { previous += 1; continue }

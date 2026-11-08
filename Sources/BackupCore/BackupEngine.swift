@@ -66,19 +66,27 @@ public struct BackupPlan: Sendable {
     public let backupDirectory: URL
     public let files: [PlannedFile]
     public let totalBytes: Int64
+    /// Other backups on the same destination; files found there are not stored again.
+    public var existing = ExistingBackups()
 
     /// The same plan without the files at `paths`.
     public func excluding(_ paths: Set<String>) -> BackupPlan {
         let kept = files.filter { !paths.contains($0.relativePath) }
         var plan = BackupPlan(sourceName: sourceName, sourceDirectory: sourceDirectory, backupDirectory: backupDirectory,
-                              files: kept, totalBytes: kept.reduce(0) { $0 + $1.size })
+                              files: kept, totalBytes: kept.reduce(0) { $0 + $1.size }, existing: existing)
         plan.deviceID = deviceID
         return plan
     }
 }
 
 public enum FileOutcome: String, Sendable {
-    case copied, unchanged, error
+    /// Stored in this backup.
+    case copied
+    /// Already in this backup.
+    case unchanged
+    /// Same content already stored in another backup on the destination; not stored again.
+    case duplicate
+    case error
 }
 
 public struct BackupReport: Sendable {
@@ -86,6 +94,9 @@ public struct BackupReport: Sendable {
     public var copied = 0
     public var unchanged = 0
     public var bytesCopied: Int64 = 0
+    /// Files whose content was already in another backup, and their total size.
+    public var duplicates = 0
+    public var duplicateBytes: Int64 = 0
     public var errors: [String] = []
     /// True when the user stopped the backup before every file was processed.
     public var cancelled = false
@@ -105,7 +116,7 @@ public enum BackupEngine {
     // MARK: Planning
 
     /// Validates the two folders and lists every regular file, without following symlinks.
-    public static func makePlan(source: URL, destination: URL) throws -> BackupPlan {
+    public static func makePlan(source: URL, destination: URL, references: [URL] = []) throws -> BackupPlan {
         let sourcePath: String
         do {
             sourcePath = try FS.realPath((source.path as NSString).expandingTildeInPath)
@@ -134,7 +145,13 @@ public enum BackupEngine {
             sourceDirectory: URL(fileURLWithPath: sourcePath, isDirectory: true),
             backupDirectory: URL(fileURLWithPath: backupPath, isDirectory: true),
             files: found,
-            totalBytes: found.reduce(0) { $0 + $1.size }
+            totalBytes: found.reduce(0) { $0 + $1.size },
+            existing: ExistingBackups.load(destination: destinationPath,
+                                           excluding: (backupPath as NSString).lastPathComponent,
+                                           references: references.filter {
+                                               let ref = FS.canonicalPath($0.path)
+                                               return !FS.contains(ref, sourcePath) && !FS.contains(sourcePath, ref)
+                                           })
         )
     }
 
@@ -181,6 +198,7 @@ public enum BackupEngine {
         let manifestPath = (backupDir as NSString).appendingPathComponent(manifestName)
         var manifest = try Manifest.load(from: manifestPath, sourceName: plan.sourceName)
         var report = BackupReport(backupDirectory: plan.backupDirectory)
+        var stored = manifest.storedPathsByDigest()
         let total = plan.files.count
 
         for (offset, file) in plan.files.enumerated() {
@@ -198,6 +216,13 @@ public enum BackupEngine {
                 var target = (backupDir as NSString).appendingPathComponent(file.relativePath)
                 if try existsAsSameFile(target, digest: digest) {
                     outcome = .unchanged
+                } else if let own = storedCopy(stored[digest], in: backupDir, size: before.size) {
+                    target = own
+                    // A recorded "../other_backup/…" path means the content lives in another backup.
+                    outcome = stored[digest]!.hasPrefix("../") ? .duplicate : .unchanged
+                } else if let copy = plan.existing.copy(withDigest: digest, size: before.size) {
+                    target = copy
+                    outcome = .duplicate
                 } else {
                     if try FS.lstatIfExists(target) != nil {
                         target = try conflictPath(for: target, digest: digest)
@@ -207,13 +232,13 @@ public enum BackupEngine {
                     } else {
                         try copyVerified(from: source, to: target, expectedHash: digest, expected: before)
                         outcome = .copied
-                        report.bytesCopied += before.size
                     }
                 }
-                if outcome == .copied { report.copied += 1 } else { report.unchanged += 1 }
+                report.count(outcome, size: before.size)
 
-                manifest.record(file.relativePath, sha256: digest, size: before.size,
-                                backupPath: String(target.dropFirst(backupDir.count + 1)))
+                let backupRelative = relativePath(of: target, from: backupDir)
+                manifest.record(file.relativePath, sha256: digest, size: before.size, backupPath: backupRelative)
+                if stored[digest] == nil { stored[digest] = backupRelative }
             } catch {
                 report.errors.append("\(file.relativePath): \(error.localizedDescription)")
             }

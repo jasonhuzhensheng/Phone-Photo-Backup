@@ -52,7 +52,7 @@ final class ReviewSession {
         task = Task {
             do {
                 let groups = try await PhoneReview.findDuplicates(all, hash: { item in
-                    try await devices.sha256(deviceID: id, path: item.relativePath)
+                    try await devices.sha256(deviceID: id, path: item.relativePath, size: item.size)
                 }, progress: { done, total in
                     Task { @MainActor in self.stage = .hashing(done: done, total: total) }
                 })

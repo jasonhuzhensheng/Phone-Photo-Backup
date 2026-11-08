@@ -243,3 +243,19 @@
 "The downloaded update is a different app (%@). Nothing was changed." = "下载的更新是另一个应用（%@），没有做任何改动。";
 "The downloaded update has version %@, not the one offered. Nothing was changed." = "下载的更新版本是 %@，与提示的版本不同，没有做任何改动。";
 "The downloaded app's code signature is not valid. Nothing was changed." = "下载的应用代码签名无效，没有做任何改动。";
+
+/* Duplicates across backups */
+"Already backed up" = "已备份过";
+"New" = "新文件";
+"%@ files · %@" = "%1$@ 个文件 · %2$@";
+"Compared with %@ by name and size. During the backup every file is checked with SHA-256; files already stored there are not stored again." = "已按文件名和大小与 %@ 比对。备份时每个文件都会用 SHA-256 确认，已在其中保存过的文件不会再存一份。";
+"%@ files, %@, will be copied into:\n%@\n\nAbout %@ of them (%@) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted." = "将处理 %1$@ 个文件（%2$@），备份到：\n%3$@\n\n其中约 %4$@ 个（%5$@）已在本盘的其他备份中，不会再存一份。\n\n原文件不会被修改或删除。";
+"Compare with" = "参照文件夹";
+"Optional: folders already backed up (another drive, an older backup). Files found there are not backed up again. Other backups on the backup drive are always compared." = "可选：以前备份过的文件夹（其他硬盘、旧的备份）。其中已有的文件不会再备份。备份盘上的其他备份始终会参与比对。";
+"Add…" = "添加…";
+"Add" = "添加";
+"Remove" = "移除";
+"Choose folders that are already backed up. Files found in them are not backed up again." = "选择已经备份过的文件夹。其中已有的文件不会再备份。";
+"Free on drive" = "备份盘剩余";
+"Not enough space for about %@ of new files" = "空间不足，新文件约需 %@";
+"%@ files, %@, will be copied into:\n%@\n\nAbout %@ of them (%@) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported." = "将处理 %1$@ 个文件（%2$@），备份到：\n%3$@\n\n其中约 %4$@ 个（%5$@）已在本盘的其他备份中，不会再存一份。\n\n原文件不会被修改或删除。之后会把“照片”里还没有的照片和视频导入。";

@@ -145,7 +145,11 @@ final class DeviceFixture {
         let other = try await f.backup()
         #expect(first.backupDirectory.lastPathComponent == "Test iPhone_backup")
         #expect(other.backupDirectory.lastPathComponent == "Test iPhone 2_backup")
-        #expect(other.copied == 2) // nothing was skipped because of the first phone's files
+        // Not mistaken for "unchanged" in the first phone's folder; the identical files are found
+        // in the other backup on the drive and recorded as duplicates instead of stored twice.
+        #expect(other.unchanged == 0)
+        #expect(other.copied + other.duplicates == 2)
+        #expect(other.duplicates == 2)
         f.deviceID = "device-A"
         let again = try await f.backup()
         #expect(again.backupDirectory.lastPathComponent == "Test iPhone_backup")

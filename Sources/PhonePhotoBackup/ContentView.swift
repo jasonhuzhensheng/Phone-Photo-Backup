@@ -18,6 +18,8 @@ struct ContentView: View {
                     FolderRow(title: "Backup location", placeholder: "A separate folder or external drive",
                               systemImage: "externaldrive", url: model.destinationURL, disabled: model.isBusy,
                               choose: model.chooseDestination, drop: model.setDestination)
+                    Divider().padding(.vertical, 8)
+                    ReferenceRow()
                 }
                 .padding(6)
             }
@@ -48,9 +50,16 @@ struct ContentView: View {
         } message: {
             if let plan = model.plan {
                 let size = ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file)
-                if model.importToPhotos {
+                let dup = plan.likelyDuplicates
+                let dupSize = ByteCountFormatter.string(fromByteCount: dup.bytes, countStyle: .file)
+                switch (dup.count > 0, model.importToPhotos) {
+                case (true, true):
+                    Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nAbout \(dup.count.formatted()) of them (\(dupSize)) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported.")
+                case (true, false):
+                    Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nAbout \(dup.count.formatted()) of them (\(dupSize)) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted.")
+                case (false, true):
                     Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported.")
-                } else {
+                case (false, false):
                     Text("\(plan.files.count.formatted()) files, \(size), will be copied into:\n\(plan.backupDirectory.path)\n\nOriginal files will not be changed or deleted.")
                 }
             }
@@ -269,6 +278,54 @@ struct DeviceStatus: View {
 
 // MARK: - Folder row
 
+/// Folders that are already backed up elsewhere; files found there are not backed up again.
+private struct ReferenceRow: View {
+    @Environment(BackupModel.self) private var model
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Compare with").font(.headline)
+                if model.referenceFolders.isEmpty {
+                    Text("Optional: folders already backed up (another drive, an older backup). Files found there are not backed up again. Other backups on the backup drive are always compared.")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(model.referenceFolders, id: \.self) { url in
+                        HStack(spacing: 6) {
+                            Image(systemName: "folder").foregroundStyle(.secondary)
+                            Text(verbatim: url.path)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(url.path)
+                            Button {
+                                model.removeReferenceFolder(url)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                            }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.secondary)
+                            .help(Text("Remove"))
+                            .disabled(model.isBusy)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 8)
+            Button("Add…") { model.addReferenceFolders() }
+                .disabled(model.isBusy)
+        }
+        .padding(6)
+    }
+}
+
 private struct FolderRow: View {
     let title: LocalizedStringKey
     let placeholder: LocalizedStringKey
@@ -455,6 +512,7 @@ private struct StatusPanel: View {
 }
 
 private struct PlanSummary: View {
+    @Environment(BackupModel.self) private var model
     let plan: BackupPlan
 
     var body: some View {
@@ -467,6 +525,34 @@ private struct PlanSummary: View {
                 Text("Size").foregroundStyle(.secondary)
                 Text(verbatim: ByteCountFormatter.string(fromByteCount: plan.totalBytes, countStyle: .file))
             }
+            if !plan.existing.isEmpty {
+                let dup = plan.likelyDuplicates
+                GridRow {
+                    Text("Already backed up").foregroundStyle(.secondary)
+                    Text("\(dup.count.formatted()) files · \(Self.bytes(dup.bytes))").monospacedDigit()
+                }
+                GridRow {
+                    Text("New").foregroundStyle(.secondary)
+                    Text("\((plan.files.count - dup.count).formatted()) files · \(Self.bytes(plan.totalBytes - dup.bytes))")
+                        .monospacedDigit()
+                        .fontWeight(.semibold)
+                }
+            }
+            if let free = model.freeSpace {
+                // Estimate: new files by name and size. Exact duplicates found during the backup
+                // make the real amount smaller.
+                let needed = plan.totalBytes - plan.likelyDuplicates.bytes
+                GridRow {
+                    Text("Free on drive").foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text(verbatim: Self.bytes(free)).monospacedDigit()
+                        if needed > free {
+                            Label("Not enough space for about \(Self.bytes(needed)) of new files", systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
             GridRow {
                 Text("Backup folder").foregroundStyle(.secondary)
                 Text(verbatim: plan.backupDirectory.path)
@@ -474,8 +560,19 @@ private struct PlanSummary: View {
                     .truncationMode(.middle)
                     .textSelection(.enabled)
             }
+            if !plan.existing.isEmpty {
+                GridRow {
+                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    Text("Compared with \(plan.existing.folders.joined(separator: ", ")) by name and size. During the backup every file is checked with SHA-256; files already stored there are not stored again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
+
+    static func bytes(_ count: Int64) -> String { ByteCountFormatter.string(fromByteCount: count, countStyle: .file) }
 }
 
 struct DeletionSummary: View {
@@ -584,6 +681,9 @@ private struct ReportSummary: View {
             HStack(spacing: 24) {
                 stat("Copied", report.copied.formatted())
                 stat("Unchanged", report.unchanged.formatted())
+                if report.duplicates > 0 {
+                    stat("Duplicates skipped", report.duplicates.formatted())
+                }
                 stat("Errors", report.errors.count.formatted())
                 stat("Data copied", ByteCountFormatter.string(fromByteCount: report.bytesCopied, countStyle: .file))
                 Spacer()

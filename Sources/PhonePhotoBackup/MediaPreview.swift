@@ -258,6 +258,7 @@ struct MediaPreviewSheet: View {
         }
         let devices = model.devices
         let path = item.id
+        let size = item.size
         let ext = (path as NSString).pathExtension.lowercased()
         guard backupCopy != nil || phone != nil else {
             media = .failed(String(localized: "The file is no longer there."))
@@ -273,7 +274,7 @@ struct MediaPreviewSheet: View {
             } else {
                 let type = UTType(filenameExtension: ext)?.identifier ?? UTType.movie.identifier
                 let streamer = PhoneStreamLoader(size: item.size, contentType: type) { offset, length in
-                    try await devices.readData(deviceID: deviceID, path: path, offset: offset, length: length)
+                    try await devices.readData(deviceID: deviceID, path: path, size: size, offset: offset, length: length)
                 }
                 player = AVPlayer(playerItem: streamer.makePlayerItem(fileExtension: ext))
                 loader = streamer
@@ -292,7 +293,7 @@ struct MediaPreviewSheet: View {
                 while Int64(buffer.count) < item.size {
                     try Task.checkCancellation()
                     let length = Int(min(8 << 20, item.size - Int64(buffer.count)))
-                    buffer.append(try await devices.readData(deviceID: deviceID, path: path,
+                    buffer.append(try await devices.readData(deviceID: deviceID, path: path, size: size,
                                                              offset: Int64(buffer.count), length: length))
                 }
                 data = buffer

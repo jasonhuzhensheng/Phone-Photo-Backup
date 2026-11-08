@@ -14,14 +14,15 @@
 | `Sources/BackupCore/PhoneReview.swift` | 备份前检查：最大的视频、完全相同的重复项（先按大小筛选候选，再由注入的哈希函数确认）、删除前核对备份（清单中同大小版本且副本存在）、取得备份副本的 SHA-256 | 纯逻辑，不删除任何东西 |
 | `Sources/BackupCore/BackupVideos.swift` | 列出备份位置下的视频（跳过隐藏文件，不跟随符号链接，标出实况照片的视频）、生成带视频总大小的文件夹树、按文件夹筛选 | 纯文件逻辑，只读 |
 | `Sources/BackupCore/DirectImport.swift` | `TimeIndexedLibrary`：按拍摄时间索引图库，只对时间吻合的项目读取文件名（规则同 `LibraryIndex`）；手机项目配对为照片/视频/实况照片；导入记录里的手机文件记录（设备 + 路径 + 大小） | 纯逻辑；文件名读取由注入的闭包完成 |
+| `Sources/BackupCore/ExistingBackups.swift` | 跨备份去重索引：备份盘上所有带清单的 `*_backup` 文件夹，加上用户选的「参照文件夹」（本 App 的备份用清单；普通文件夹逐个列出）。预览按「文件名 + 大小」估算已备份数量，备份时按 SHA-256 精确匹配（普通文件夹只对大小相同的文件计算哈希）| 只读；重复文件不再存储，清单里 `backup_path` 记为 `../其他备份/…` |
 | `Sources/BackupCore/Manifest.swift` | 读写 `.phone-photo-backup.json`（schema 1，与旧 Python 版兼容） | 原子写入；无法读取或不匹配时在复制前中止 |
 | `Sources/BackupCore/FileSystem.swift` | POSIX 辅助：`lstat`、排他创建、排他发布、元数据复制 | 不跟随符号链接 |
-| `Sources/PhonePhotoBackup/DeviceBrowser.swift` | ImageCaptureCore：发现 USB 设备、打开会话、读取完整文件列表（含 Live Photo 视频等附属文件）、下载单个文件、按范围读取文件片段（预览、查重）、请求指定尺寸的缩略图；手机锁定或断开时等待恢复并重读列表 | 只读设备；不删除、不上传 |
+| `Sources/PhonePhotoBackup/DeviceBrowser.swift` | ImageCaptureCore：发现 USB 设备、打开会话、读取完整文件列表（含 Live Photo 视频等附属文件）、下载单个文件、按范围读取文件片段（预览、查重）、请求指定尺寸的缩略图；文件数连续 8 秒不变才算列表读完（大图库要约 30 秒）；按路径找不到时按「文件名 + 大小」重新定位；手机锁定或断开时等待恢复并重读列表 | 只读设备；不删除、不上传 |
 | `Sources/PhonePhotoBackup/PhotoLibraryImporter.swift` | PhotoKit：申请读写权限、读取图库已有项目的文件名与创建时间、读取备份文件的拍摄时间（EXIF/视频元数据，缺失时用文件时间）、创建照片/视频/实况照片并加入“从旧手机导入”相簿；实况照片配对失败时分开导入 | 只添加，不修改或删除图库中已有项目；`shouldMoveFile = false`，备份文件保持不动 |
 | `Sources/PhonePhotoBackup/ReviewView.swift` | 检查清单窗口：`ReviewSession` 计算大视频和重复项（从手机分块读取计算 SHA-256）、缩略图、勾选；默认勾选重复组中除最早一份外的副本 | 只做选择；删除由模型在备份后经「照片」执行 |
 | `Sources/PhonePhotoBackup/MediaPreview.swift` | 检查清单里的大图/视频预览：有备份副本时播放副本；否则 `PhoneStreamLoader`（`AVAssetResourceLoaderDelegate`）按播放器请求的字节范围从手机分块读取，不先复制整个文件；照片整份读入内存显示；“保留/删除”按钮修改勾选并跳到下一项 | 只读手机和备份；不写临时文件 |
 | `Sources/PhonePhotoBackup/BackupVideosView.swift` | “备份里的视频”窗口：左侧文件夹树，右侧按大小/日期/名称排序的视频列表（Quick Look 缩略图、时长），预览复用 `MediaPreviewSheet`，标记后移到废纸篓 | 只移到废纸篓，不直接删除；备份或导入进行中不能移动；不修改清单 |
-| `Sources/PhonePhotoBackup/BackupModel.swift` | `@MainActor @Observable` 状态：来源（文件夹或设备）选择与记忆、新接入的手机自动设为来源、自动模式（接入即扫描 → 备份 → 导入，每台手机每次启动只自动运行一次）、扫描/备份/导入任务、进度、取消、防休眠 | 在后台任务中调用引擎 |
+| `Sources/PhonePhotoBackup/BackupModel.swift` | `@MainActor @Observable` 状态：来源（文件夹或设备）选择与记忆、参照文件夹、新接入的手机自动设为来源、自动模式（接入即扫描 → 备份 → 导入，每台手机每次启动只自动运行一次）、扫描/备份/导入任务、进度、取消、防休眠 | 在后台任务中调用引擎 |
 | `Sources/PhonePhotoBackup/ContentView.swift` | SwiftUI 界面：来源行（菜单列出已连接手机或选择文件夹，支持拖放）、手机状态、状态面板、确认对话框、结果与错误列表 | 不含文件操作逻辑 |
 | `Sources/PhonePhotoBackup/PhonePhotoBackupApp.swift` | 应用入口、单窗口、菜单与快捷键 | — |
 | `Sources/BackupCore/AppUpdate.swift` | 版本号比较、解析 GitHub `releases/latest`、选出 `Phone-Photo-Backup-<版本>.zip` 及其 SHA-256（GitHub 的 `digest`，或发布说明里的 `SHA-256:` 行）；校验并解压下载（SHA-256、包标识、版本、`codesign --verify --strict --deep`）；生成替换脚本（等旧进程退出 → 旧包移开 → 新包移入，失败放回 → 重新打开 → 清理） | 不联网；只在临时目录和应用所在位置操作 |
@@ -32,7 +33,7 @@
 
 流程：界面读取两个目录 → 引擎解析真实路径并验证源和目标不重叠（不区分大小写）→ 扫描普通文件并预览数量/体积 → 用户确认 → 对每个文件计算 SHA-256 → 分块写入 `.part` 临时文件并 `fsync` → 确认源文件大小/修改时间未变且哈希一致 → 复制权限、时间戳（纳秒）、创建日期、扩展属性 → 排他地发布到目标（`renamex_np(RENAME_EXCL)`，否则硬链接，再否则检查后重命名，以支持 exFAT）→ 最后原子更新清单。目标以来源目录名加 `_backup` 命名，保持相对目录结构。
 
-设备来源流程：发现设备 → 打开会话（iPhone 会提示“信任此电脑”）→ 等待完整文件列表 → 按设备上的文件夹结构生成相对路径和计划（备份目录为 `<设备名>_backup`）→ 用户确认 → 对每个文件：若清单中已有相同大小的版本且备份副本仍在则跳过，否则下载到本机临时目录的暂存区 → 核对大小与设备报告一致 → SHA-256 → 与文件夹来源相同的跳过/冲突规则 → 排他发布（同卷：fsync 后重命名；跨卷：8 MB 大块复制、边写边校验 SHA-256、fsync、复制时间戳后排他发布）→ 最后原子更新清单。手机锁定或断开时下载在原地等待，恢复后重新读取文件列表并继续；用户可随时停止。
+设备来源流程：发现设备 → 打开会话（iPhone 会提示“信任此电脑”）→ 等待完整文件列表 → 按设备上的文件夹结构生成相对路径和计划（备份目录为 `<设备名>_backup`）→ 用户确认 → 对每个文件：若清单中已有相同大小的版本且备份副本仍在则跳过，否则下载到本机临时目录的暂存区 → 核对大小与设备报告一致 → SHA-256 → 与文件夹来源相同的跳过/冲突规则；本备份里已有同 SHA-256 的副本则指向它；其他备份或参照文件夹里有同 SHA-256 的副本则记为「重复」，不再存储 → 排他发布（同卷：fsync 后重命名；跨卷：8 MB 大块复制、边写边校验 SHA-256、fsync、复制时间戳后排他发布）→ 最后原子更新清单。手机锁定或断开时下载在原地等待，恢复后重新读取文件列表并继续；用户可随时停止。
 
 设备备份文件夹归属：文件夹内的 `.phone-photo-backup-device` 记录设备编号。同名手机或同名的文件夹备份已占用 `<名称>_backup` 时，依次改用 `<名称> 2_backup`、`<名称> 3_backup`。
 

@@ -51,6 +51,10 @@ final class BackupModel {
     private(set) var report: BackupReport?
     var alertMessage: String?
     var confirmingStart = false
+    /// Folders already backed up elsewhere (another drive, an old export…) to compare with.
+    private(set) var referenceFolders: [URL] = []
+    /// Free space on the backup volume, measured when scanning.
+    private(set) var freeSpace: Int64?
 
     // Review before backup and deleting through Photos
     private(set) var review: ReviewSession?
@@ -90,7 +94,7 @@ final class BackupModel {
     private let isSelfCheck = ProcessInfo.processInfo.environment["PPB_SNAPSHOT_DIR"] != nil
 
     private var task: Task<Void, Never>?
-    private static let sourceKey = "sourcePath", destinationKey = "destinationPath"
+    private static let sourceKey = "sourcePath", destinationKey = "destinationPath", referencesKey = "referencePaths"
     private static let importKey = "importToPhotos", autoStartKey = "autoStartOnConnect"
     private static let reviewKey = "reviewBeforeBackup"
 
@@ -98,6 +102,7 @@ final class BackupModel {
         let defaults = UserDefaults.standard
         source = Self.existingFolder(defaults.string(forKey: Self.sourceKey)).map(Source.folder)
         destinationURL = Self.existingFolder(defaults.string(forKey: Self.destinationKey))
+        referenceFolders = (defaults.stringArray(forKey: Self.referencesKey) ?? []).compactMap(Self.existingFolder)
         importToPhotos = defaults.bool(forKey: Self.importKey)
         autoStart = defaults.bool(forKey: Self.autoStartKey)
         reviewBeforeBackup = defaults.object(forKey: Self.reviewKey) as? Bool ?? true
@@ -203,6 +208,32 @@ final class BackupModel {
         }
     }
 
+    // MARK: Reference folders
+
+    func addReferenceFolders() {
+        guard !isBusy else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.message = String(localized: "Choose folders that are already backed up. Files found in them are not backed up again.")
+        panel.prompt = String(localized: "Add")
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls where !referenceFolders.contains(url) { referenceFolders.append(url) }
+        saveReferences()
+    }
+
+    func removeReferenceFolder(_ url: URL) {
+        guard !isBusy else { return }
+        referenceFolders.removeAll { $0 == url }
+        saveReferences()
+    }
+
+    private func saveReferences() {
+        UserDefaults.standard.set(referenceFolders.map(\.path), forKey: Self.referencesKey)
+        invalidatePlan()
+    }
+
     private func invalidatePlan() {
         plan = nil
         report = nil
@@ -215,6 +246,9 @@ final class BackupModel {
 
     func scan() {
         guard canScan, let source, let destination = destinationURL else { return }
+        let references = referenceFolders.filter { FileManager.default.fileExists(atPath: $0.path) }
+        freeSpace = (try? destination.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage
         plan = nil
         report = nil
         importReport = nil
@@ -225,14 +259,17 @@ final class BackupModel {
             switch source {
             case .folder(let folder):
                 result = await Task.detached(priority: .userInitiated) {
-                    Result { try BackupEngine.makePlan(source: folder, destination: destination) }
+                    Result { try BackupEngine.makePlan(source: folder, destination: destination, references: references) }
                 }.value
             case .device(let id):
                 do {
                     try await devices.waitUntilReady(id)
                     let catalog = try devices.catalog(of: id)
-                    result = .success(BackupEngine.makeDevicePlan(deviceName: catalog.name, deviceID: id,
-                                                                  files: catalog.files, destination: destination))
+                    // Indexing reference folders can take a moment: do it off the main thread.
+                    result = .success(await Task.detached(priority: .userInitiated) {
+                        BackupEngine.makeDevicePlan(deviceName: catalog.name, deviceID: id, files: catalog.files,
+                                                    destination: destination, references: references)
+                    }.value)
                 } catch {
                     result = .failure(error)
                 }
@@ -314,7 +351,7 @@ final class BackupModel {
                 do {
                     if let deviceID {
                         return .success(try await BackupEngine.runStaged(plan, fetch: { file, directory in
-                            try await devices.download(deviceID: deviceID, path: file.relativePath, into: directory)
+                            try await devices.download(deviceID: deviceID, path: file.relativePath, size: file.size, into: directory)
                         }, isCancelled: { Task.isCancelled }, progress: progress))
                     }
                     return .success(try BackupEngine.run(plan, isCancelled: { Task.isCancelled }, progress: progress))
@@ -595,7 +632,7 @@ final class BackupModel {
                         var files: [String: ImportFile] = [:]
                         var hashes: [String: String] = [:]
                         for file in item.files {
-                            let url = try await devices.download(deviceID: id, path: file.relativePath, into: staging)
+                            let url = try await devices.download(deviceID: id, path: file.relativePath, size: file.size, into: staging)
                             downloaded.append(url)
                             let sha = try await Task.detached { try BackupEngine.sha256(of: url.path) }.value
                             files[file.relativePath] = ImportFile(url: url, sha256: sha, size: file.size)
