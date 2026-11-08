@@ -56,6 +56,16 @@ struct Manifest: Codable {
         files[relativePath] = versions
     }
 
+    /// SHA-256 → stored path (relative to the backup folder) for every version, so a file whose
+    /// source path changed is recognised instead of being stored a second time.
+    func storedPathsByDigest() -> [String: String] {
+        var map: [String: String] = [:]
+        for versions in files.values {
+            for version in versions where map[version.sha256] == nil { map[version.sha256] = version.backupPath }
+        }
+        return map
+    }
+
     /// Marks the newest version of `relativePath` as seen again without re-reading it.
     mutating func touch(_ relativePath: String, version index: Int) {
         files[relativePath]?[index].lastSeen = Self.timestamp()
