@@ -3,12 +3,18 @@ import Foundation
 
 /// Backups from a source that is not a mounted folder, such as a phone connected over USB.
 ///
-/// Each file is fetched into a staging folder inside the backup folder (so the final move stays on
-/// one volume), checked against the size the device reported, flushed to disk, hashed with SHA-256
-/// and then moved into place without overwriting anything. Skip, conflict-copy and manifest rules
+/// Each file is fetched into a staging folder on the Mac's own disk, checked against the size the
+/// device reported and hashed with SHA-256. If the backup is on the same volume it is moved into
+/// place; otherwise it is copied with large writes, verified again while writing, flushed and then
+/// published without overwriting anything. (ImageCaptureCore writes very slowly straight onto
+/// exFAT drives — about a tenth of the speed it reaches on the internal APFS disk — so it never
+/// downloads directly to the backup volume.) Skip, conflict-copy and manifest rules
 /// are the same as for folder backups. Nothing on the device is modified or deleted.
 extension BackupEngine {
+    /// Staging folder used inside the backup folder by earlier versions; removed if found.
     public static let stagingFolderName = ".phone-photo-backup-staging"
+    /// Prefix of the per-run staging folder created in the temporary directory.
+    static let localStagingPrefix = "PhonePhotoBackup-staging-"
 
     /// Fetches one file into `directory` and returns the URL of the file it wrote there.
     public typealias Fetch = @Sendable (_ file: PlannedFile, _ directory: URL) async throws -> URL
@@ -51,6 +57,7 @@ extension BackupEngine {
     public static func runStaged(
         _ plan: BackupPlan,
         fetch: Fetch,
+        stagingParent: URL = FileManager.default.temporaryDirectory,
         isCancelled: @Sendable () -> Bool = { Task.isCancelled },
         progress: BackupProgress? = nil
     ) async throws -> BackupReport {
@@ -59,11 +66,13 @@ extension BackupEngine {
         let manifestPath = (backupDir as NSString).appendingPathComponent(manifestName)
         var manifest = try Manifest.load(from: manifestPath, sourceName: plan.sourceName)
 
-        let staging = URL(fileURLWithPath: backupDir, isDirectory: true)
-            .appendingPathComponent(stagingFolderName, isDirectory: true)
-        try? FileManager.default.removeItem(at: staging) // leftovers from an interrupted run
+        // Leftovers from interrupted runs (and from versions that staged inside the backup folder).
+        try? FileManager.default.removeItem(atPath: (backupDir as NSString).appendingPathComponent(stagingFolderName))
+        removeStaleStaging(in: stagingParent)
+        let staging = stagingParent.appendingPathComponent(localStagingPrefix + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
+        let sameVolume = (try? FS.lstatInfo(staging.path).st_dev) == (try? FS.lstatInfo(backupDir).st_dev)
 
         var report = BackupReport(backupDirectory: plan.backupDirectory)
         let total = plan.files.count
@@ -82,7 +91,8 @@ extension BackupEngine {
                     let downloaded = try await fetch(file, staging).path
                     defer { unlink(downloaded) } // no-op once the file has been moved into place
                     guard FS.contains(staging.path, downloaded) else { throw BackupError(.downloadIncomplete) }
-                    outcome = try place(downloaded, as: file, backupDir: backupDir, manifest: &manifest, report: &report)
+                    outcome = try place(downloaded, as: file, backupDir: backupDir, sameVolume: sameVolume,
+                                        manifest: &manifest, report: &report)
                 }
                 if outcome == .copied { report.copied += 1 } else { report.unchanged += 1 }
             } catch {
@@ -116,15 +126,23 @@ extension BackupEngine {
         return nil
     }
 
-    /// Verifies a fetched file and moves it to its place in the backup folder.
+    /// Removes staging folders that interrupted runs left in `parent`.
+    private static func removeStaleStaging(in parent: URL) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
+        for name in names where name.hasPrefix(localStagingPrefix) {
+            try? FileManager.default.removeItem(at: parent.appendingPathComponent(name))
+        }
+    }
+
+    /// Verifies a fetched file and moves or copies it to its place in the backup folder.
     private static func place(
-        _ downloaded: String, as file: PlannedFile, backupDir: String,
+        _ downloaded: String, as file: PlannedFile, backupDir: String, sameVolume: Bool,
         manifest: inout Manifest, report: inout BackupReport
     ) throws -> FileOutcome {
         let info = try FS.lstatInfo(downloaded)
         let size = Int64(info.st_size)
         guard FS.isRegularFile(info), size == file.size else { throw BackupError(.downloadIncomplete) }
-        try FS.flush(downloaded)
+        if sameVolume { try FS.flush(downloaded) }
         let digest = try sha256(of: downloaded)
 
         var target = (backupDir as NSString).appendingPathComponent(file.relativePath)
@@ -136,7 +154,11 @@ extension BackupEngine {
             if try !existsAsSameFile(target, digest: digest) {
                 try FileManager.default.createDirectory(atPath: (target as NSString).deletingLastPathComponent,
                                                         withIntermediateDirectories: true)
-                try FS.publishExclusive(downloaded, to: target)
+                if sameVolume {
+                    try FS.publishExclusive(downloaded, to: target)
+                } else {
+                    try copyVerified(from: downloaded, to: target, expectedHash: digest, expected: FileSnapshot(info))
+                }
                 outcome = .copied
                 report.bytesCopied += size
             }
