@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-Phone Photo Backup 是 macOS 原生应用（Swift 6 + SwiftUI，macOS 14+），支持英文与简体中文界面，版本 2.4.0。可以通过 USB 直接从手机备份（ImageCaptureCore，iPhone/iPad 与 PTP 模式的安卓手机），也可以备份已导出的文件夹；可选在备份后导入 Mac「照片」，由 iCloud 照片同步到新手机；有接入即自动备份并导入的一键模式；备份手机前可列出最大视频和完全相同的重复项，备份后经「照片」删除到“最近删除”。备份规则与清单格式不变；应用本身不上传。手机直连在分支 `feature/device-import`（PR #2），一键导入在其上的 `feature/one-click-import`。
+Phone Photo Backup 是 macOS 原生应用（Swift 6 + SwiftUI，macOS 14+），支持英文与简体中文界面，版本 2.5.0。可以通过 USB 直接从手机备份（ImageCaptureCore，iPhone/iPad 与 PTP 模式的安卓手机），也可以备份已导出的文件夹；可选在备份后导入 Mac「照片」，由 iCloud 照片同步到新手机；有接入即自动备份并导入的一键模式；备份手机前可列出最大视频和完全相同的重复项，备份后经「照片」删除到“最近删除”。备份规则与清单格式不变；应用本身不上传。手机直连在分支 `feature/device-import`（PR #2），一键导入在其上的 `feature/one-click-import`。
 
 ## 已完成与验证
 
@@ -16,7 +16,8 @@ Phone Photo Backup 是 macOS 原生应用（Swift 6 + SwiftUI，macOS 14+），�
 - 一键导入「照片」（2026-11-07）：`PhotosImport` 规划（SHA-256 跨备份去重、导入记录、实况照片配对、图库元数据匹配），`PhotoLibraryImporter` 用 PhotoKit 导入并放进“从旧手机导入”相簿；自动模式；同名手机分开存放（设备编号标记文件）。自检模式下导入和自动模式均被禁用，自检确认没有写入导入记录。
 - 备份前检查（2026-11-07）：`PhoneReview` + `ReviewView`；删除经 PhotoKit 进入“最近删除”，默认只删备份已核对的项目，唯一严格匹配，已删项目写入导入记录。应用不直接删除手机文件。
 - 检查清单预览（2026-11-07，2.4.0）：缩略图放大为 160×90，点按打开大图/视频预览（`MediaPreview.swift`），有“保留/删除”和上一项/下一项。流式播放用 ffmpeg 生成的测试视频验证：在模拟 40 MB/s 的读取速度下，358 MB 的视频可以播放，跳到 100 秒处立即生效，只读取了约 67 MB。
-- `swift test`：29 项测试通过（9 项文件夹引擎，10 项模拟设备，7 项导入规划，3 项检查逻辑），只用临时模拟字节。
+- 备份里的视频（2026-11-07，2.5.0）：`BackupVideos` + `BackupVideosView`，⇧⌘V 或主窗口按钮打开；移到废纸篓。自检用 ffmpeg 生成的测试视频截图：按大小排序、Quick Look 缩略图、时长、文件夹树和隐藏实况照片视频都正常（截图在 4-videos.png）。预览和移到废纸篓的点击操作没有自动化验证。
+- `swift test`：30 项测试通过（9 项文件夹引擎，10 项模拟设备，7 项导入规划，3 项检查逻辑，1 项备份视频扫描），只用临时模拟字节。
 - `scripts/build-app.sh` 生成 ad-hoc 签名的 `build/Phone Photo Backup.app`（约 1.5 MB），`codesign --verify --strict` 通过。
 - 用 `PPB_SNAPSHOT_DIR` 自检在临时模拟文件（41 个、43.6 MB）上跑通扫描 → 备份 → 完成，中英文界面截图检查正常；再次运行全部跳过，修改文件后生成冲突副本。改回 `@State` 后在 Xcode 机器上复测：18 个模拟文件、26.8 MB，首次全部复制，再次运行 18 个未变化、0 错误，英文与简体中文截图正常。
 - 兼容性：旧 Python 版在 Swift 版生成的备份上运行，结果为 41 个未变化、0 错误。

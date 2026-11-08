@@ -162,10 +162,15 @@ struct ReviewSheet: View {
         .padding(20)
         .frame(minWidth: 760, idealWidth: 860, minHeight: 640)
         .sheet(item: $previewing) { target in
-            let items = review.previewItems
-            MediaPreviewSheet(review: review, items: items,
-                              index: items.firstIndex { $0.relativePath == target.id } ?? 0,
-                              backupDirectory: model.plan?.backupDirectory)
+            let entries = review.previewItems.map {
+                PreviewEntry(id: $0.relativePath, filename: $0.filename, size: $0.size,
+                             details: $0.reviewDetails, isVideo: $0.isVideo, fileURL: nil)
+            }
+            MediaPreviewSheet(entries: entries,
+                              index: entries.firstIndex { $0.id == target.id } ?? 0,
+                              marked: $review.selected,
+                              phone: PreviewPhone(deviceID: review.deviceID,
+                                                  backupDirectory: model.plan?.backupDirectory))
                 .environment(model)
         }
         .confirmationDialog("Delete the selected items?", isPresented: $confirmingDelete) {

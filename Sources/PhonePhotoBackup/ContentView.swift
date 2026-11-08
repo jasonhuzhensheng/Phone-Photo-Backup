@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(BackupModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var model = model
@@ -26,6 +27,9 @@ struct ContentView: View {
         }
         .padding(24)
         .frame(minWidth: 620, idealWidth: 680, minHeight: 540)
+        .task {
+            SelfCheck.runIfRequested(model: model) { openWindow(id: BackupVideosView.windowID) }
+        }
         .alert("Backup error", isPresented: Binding(get: { model.alertMessage != nil },
                                                    set: { if !$0 { model.alertMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -112,6 +116,7 @@ struct ContentView: View {
                 Button("Stop", role: .cancel) { model.cancel() }
                     .keyboardShortcut(.cancelAction)
             default:
+                OpenBackupVideosButton()
                 Button("Import into Photos") { model.importAllBackups() }
                     .disabled(!model.canImport)
                     .help("Add all backups in the backup location to Photos, skipping duplicates")

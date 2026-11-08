@@ -108,15 +108,36 @@ private struct PlayerView: NSViewRepresentable {
     }
 }
 
-/// A large preview of one item from the review list, with Keep and Delete buttons that move on
-/// to the next item, so videos can be watched and decided on one after another.
+/// One item a preview can show.
+struct PreviewEntry: Identifiable {
+    /// The path on the phone (review list) or in the backup location (backup videos).
+    let id: String
+    let filename: String
+    let size: Int64
+    let details: String
+    let isVideo: Bool
+    /// A file on this Mac. When nil, the preview looks for a backup copy and else reads the phone.
+    let fileURL: URL?
+}
+
+/// Where to read entries that are not files on this Mac.
+struct PreviewPhone {
+    let deviceID: String
+    /// The phone's backup folder, to play a backup copy instead of reading the phone.
+    let backupDirectory: URL?
+}
+
+/// A large preview of one item from a list, with Keep and Delete buttons that move on to the next
+/// item, so videos can be watched and decided on one after another. "Delete" only marks the item;
+/// the list it came from does the deleting.
 struct MediaPreviewSheet: View {
     @Environment(BackupModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Bindable var review: ReviewSession
-    let items: [PhoneItem]
+    let entries: [PreviewEntry]
     @State var index: Int
-    let backupDirectory: URL?
+    @Binding var marked: Set<String>
+    var phone: PreviewPhone?
+    var markedText: LocalizedStringKey = "Will be deleted"
 
     private enum Media {
         case loading
@@ -127,8 +148,8 @@ struct MediaPreviewSheet: View {
 
     @State private var media = Media.loading
 
-    private var item: PhoneItem { items[index] }
-    private var isSelected: Bool { review.selected.contains(item.relativePath) }
+    private var item: PreviewEntry { entries[index] }
+    private var isSelected: Bool { marked.contains(item.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -138,11 +159,11 @@ struct MediaPreviewSheet: View {
                     .font(.title3.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\((index + 1).formatted()) of \(items.count.formatted())")
+                Text("\((index + 1).formatted()) of \(entries.count.formatted())")
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            Text(verbatim: item.reviewDetails)
+            Text(verbatim: item.details)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -177,10 +198,10 @@ struct MediaPreviewSheet: View {
                     .help("Previous (⌘←)")
                 Button { index += 1 } label: { Image(systemName: "chevron.right") }
                     .keyboardShortcut(.rightArrow, modifiers: .command)
-                    .disabled(index == items.count - 1)
+                    .disabled(index == entries.count - 1)
                     .help("Next (⌘→)")
 
-                Label(isSelected ? "Will be deleted" : "Will be kept",
+                Label(isSelected ? markedText : "Will be kept",
                       systemImage: isSelected ? "trash" : "checkmark.circle")
                     .foregroundStyle(isSelected ? .red : .green)
                     .padding(.leading, 8)
@@ -217,8 +238,8 @@ struct MediaPreviewSheet: View {
     }
 
     private func decide(delete: Bool) {
-        if delete { review.selected.insert(item.relativePath) } else { review.selected.remove(item.relativePath) }
-        if index < items.count - 1 { index += 1 }
+        if delete { marked.insert(item.id) } else { marked.remove(item.id) }
+        if index < entries.count - 1 { index += 1 }
     }
 
     private func stop() {
@@ -229,14 +250,20 @@ struct MediaPreviewSheet: View {
         }
     }
 
-    private func load(_ item: PhoneItem) async {
+    private func load(_ item: PreviewEntry) async {
         stop()
         media = .loading
-        let backupCopy = backupDirectory.flatMap { PhoneReview.backupCopy(of: item, in: $0) }
+        let backupCopy = item.fileURL ?? phone?.backupDirectory.flatMap {
+            PhoneReview.backupCopy(of: PhoneItem(relativePath: item.id, size: item.size, date: nil), in: $0)
+        }
         let devices = model.devices
-        let deviceID = review.deviceID
-        let path = item.relativePath
+        let path = item.id
         let ext = (path as NSString).pathExtension.lowercased()
+        guard backupCopy != nil || phone != nil else {
+            media = .failed(String(localized: "The file is no longer there."))
+            return
+        }
+        let deviceID = phone?.deviceID ?? ""
 
         if item.isVideo {
             let player: AVPlayer

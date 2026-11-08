@@ -147,3 +147,37 @@
 "Loading from the phone…" = "正在从手机读取…";
 "The preview could not be loaded. You can still decide from the details above." = "无法加载预览。仍可根据上方的信息决定。";
 "This file cannot be shown as an image." = "这个文件无法显示为图片。";
+
+/* Backup videos */
+"Backup Videos" = "备份里的视频";
+"Browse Backup Videos…" = "浏览备份里的视频…";
+"List the videos in the backup location by size, preview them and move unwanted ones to the Trash" = "按大小列出备份位置里的视频，可以预览，并把不要的移到废纸篓";
+"Date" = "日期";
+"Name" = "名称";
+"Sort by" = "排序方式";
+"Live Photo videos" = "实况照片视频";
+"Also list the short videos that belong to Live Photos" = "也列出属于实况照片的短视频";
+"Refresh" = "刷新";
+"Look for videos again" = "重新查找视频";
+"All backups" = "所有备份";
+"%@ videos" = "%@ 个视频";
+"No backup location" = "没有备份位置";
+"Choose a backup location in the main window first." = "请先在主窗口中选择备份位置。";
+"Looking for videos…" = "正在查找视频…";
+"Cannot read the backup location" = "无法读取备份位置";
+"No videos here" = "这里没有视频";
+"%@ videos, %@" = "%1$@ 个视频，%2$@";
+"Moved %@ videos (%@) to the Trash." = "已将 %1$@ 个视频（%2$@）移到废纸篓。";
+"%@ could not be moved" = "%@ 个无法移动";
+"Marked: %@ videos, %@" = "已标记：%1$@ 个视频，%2$@";
+"Clear" = "清除标记";
+"Move to Trash…" = "移到废纸篓…";
+"Move to Trash" = "移到废纸篓";
+"Wait until the backup or import has finished" = "请等备份或导入完成";
+"Move the marked videos to the Trash" = "把标记的视频移到废纸篓";
+"Move the marked videos to the Trash?" = "把标记的视频移到废纸篓？";
+"%@ videos (%@) will be moved to the Trash. You can put them back until you empty the Trash. A video that is still on a phone is copied again by that phone's next backup; videos already imported into Photos stay there." = "%1$@ 个视频（%2$@）将移到废纸篓。清倒废纸篓之前都可以放回原处。仍在手机上的视频，下次备份这部手机时会再复制一份；已导入“照片”的视频仍会留在“照片”里。";
+"Will be moved to the Trash" = "将移到废纸篓";
+"Live Photo" = "实况照片";
+"Play" = "播放";
+"The file is no longer there." = "文件已经不在了。";

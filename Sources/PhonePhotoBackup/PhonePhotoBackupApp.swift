@@ -10,7 +10,6 @@ struct PhonePhotoBackupApp: App {
         Window("Phone Photo Backup", id: "main") {
             ContentView()
                 .environment(model)
-                .task { SelfCheck.runIfRequested(model: model) }
         }
         .windowResizability(.contentMinSize)
         .commands {
@@ -32,6 +31,9 @@ struct PhonePhotoBackupApp: App {
                 Button("Import All Backups into Photos…") { model.importAllBackups() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(!model.canImport)
+                OpenBackupVideosButton(title: "Browse Backup Videos…")
+                    .environment(model)
+                    .keyboardShortcut("v", modifiers: [.command, .shift])
                 Button("Stop") { model.cancel() }
                     .keyboardShortcut(".")
                     .disabled(!model.isBusy)
@@ -40,6 +42,12 @@ struct PhonePhotoBackupApp: App {
                     .disabled(model.plan == nil && model.report == nil)
             }
         }
+
+        Window("Backup Videos", id: BackupVideosView.windowID) {
+            BackupVideosView()
+                .environment(model)
+        }
+        .defaultSize(width: 1100, height: 720)
     }
 }
 

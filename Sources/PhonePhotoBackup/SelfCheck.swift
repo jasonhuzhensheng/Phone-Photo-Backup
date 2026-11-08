@@ -5,7 +5,7 @@ import AppKit
 /// Needs no Screen Recording permission because it renders its own views.
 @MainActor
 enum SelfCheck {
-    static func runIfRequested(model: BackupModel) {
+    static func runIfRequested(model: BackupModel, openVideos: @escaping @MainActor () -> Void) {
         guard let directory = ProcessInfo.processInfo.environment["PPB_SNAPSHOT_DIR"] else { return }
         let output = URL(fileURLWithPath: directory)
         Task { @MainActor in
@@ -17,6 +17,9 @@ enum SelfCheck {
             model.startBackup()
             await waitUntil { model.phase != .backingUp }
             snapshot(output.appendingPathComponent("3-finished.png"))
+            openVideos()
+            try? await Task.sleep(for: .seconds(4))
+            snapshot(output.appendingPathComponent("4-videos.png"), windowID: BackupVideosView.windowID)
             NSApp.terminate(nil)
         }
     }
@@ -26,8 +29,10 @@ enum SelfCheck {
         try? await Task.sleep(for: .milliseconds(400))
     }
 
-    private static func snapshot(_ url: URL) {
-        guard let window = NSApp.windows.first(where: \.isVisible),
+    private static func snapshot(_ url: URL, windowID: String? = nil) {
+        let visible = NSApp.windows.filter(\.isVisible)
+        let match = windowID.flatMap { id in visible.first { $0.identifier?.rawValue.contains(id) == true } }
+        guard let window = match ?? visible.first,
               let view = window.contentView?.superview ?? window.contentView else { return }
         view.layoutSubtreeIfNeeded()
         view.displayIfNeeded()
