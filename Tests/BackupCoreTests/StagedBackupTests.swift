@@ -141,13 +141,15 @@ final class DeviceFixture {
         let f = try DeviceFixture()
         let parent = f.root.appendingPathComponent("local-staging")
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-        // A leftover from an interrupted run is removed.
-        try FileManager.default.createDirectory(at: parent.appendingPathComponent("PhonePhotoBackup-staging-old"),
-                                                withIntermediateDirectories: true)
+        // A leftover from an exited process is removed; one from a running process is kept.
+        let stale = "PhonePhotoBackup-staging-999999-old", live = "PhonePhotoBackup-staging-\(getpid())-live"
+        for name in [stale, live] {
+            try FileManager.default.createDirectory(at: parent.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
         let report = try await BackupEngine.runStaged(f.plan(), fetch: f.device.fetch, stagingParent: parent)
         #expect(report.copied > 0)
         #expect(report.errors.isEmpty)
-        #expect(try FileManager.default.contentsOfDirectory(atPath: parent.path).isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: parent.path) == [live])
     }
 
     @Test func crossVolumeCopyIsVerifiedAndKeepsDates() throws {

@@ -69,7 +69,8 @@ extension BackupEngine {
         // Leftovers from interrupted runs (and from versions that staged inside the backup folder).
         try? FileManager.default.removeItem(atPath: (backupDir as NSString).appendingPathComponent(stagingFolderName))
         removeStaleStaging(in: stagingParent)
-        let staging = stagingParent.appendingPathComponent(localStagingPrefix + UUID().uuidString, isDirectory: true)
+        let staging = stagingParent.appendingPathComponent(
+            "\(localStagingPrefix)\(getpid())-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: staging) }
         let sameVolume = (try? FS.lstatInfo(staging.path).st_dev) == (try? FS.lstatInfo(backupDir).st_dev)
@@ -126,10 +127,15 @@ extension BackupEngine {
         return nil
     }
 
-    /// Removes staging folders that interrupted runs left in `parent`.
-    private static func removeStaleStaging(in parent: URL) {
+    /// Removes staging folders left in `parent` by runs whose process has exited
+    /// (`PhonePhotoBackup-staging-<pid>-<uuid>`). Folders of running processes are left alone.
+    static func removeStaleStaging(in parent: URL) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
         for name in names where name.hasPrefix(localStagingPrefix) {
+            let rest = name.dropFirst(localStagingPrefix.count)
+            if let pid = Int32(rest.prefix { $0 != "-" }), pid > 0, kill(pid, 0) == 0 || errno == EPERM {
+                continue // that process is still running
+            }
             try? FileManager.default.removeItem(at: parent.appendingPathComponent(name))
         }
     }

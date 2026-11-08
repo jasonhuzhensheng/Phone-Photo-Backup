@@ -72,7 +72,9 @@ final class DeviceBrowser: NSObject {
     /// disconnected, fails, or the calling task is cancelled.
     func waitUntilReady(_ id: String) async throws {
         var retried = false
+        var ticks = 0
         while true {
+            ticks += 1
             guard let device = device(id), let camera = cameras[id] else { throw DeviceError.disconnected }
             switch device.state {
             case .ready:
@@ -81,11 +83,21 @@ final class DeviceBrowser: NSObject {
                 // Try once more: a freshly trusted iPhone often needs a new session.
                 guard !retried else { throw FailedError(message: message) }
                 retried = true
-                update(id) { $0.state = .connecting }
-                openSession(camera)
+                restartSession(camera)
             case .connecting:
                 openSession(camera)
-            case .locked, .reading:
+            case .locked:
+                if !camera.isAccessRestrictedAppleDevice {
+                    // Unlocked, but the "access restriction removed" callback was missed or came
+                    // before the session closed: start over instead of waiting forever.
+                    Self.log.info("device unlocked without a callback; restarting session")
+                    restartSession(camera)
+                } else if ticks % 8 == 0, !camera.hasOpenSession {
+                    // Keep asking (every 2 s). A session request while locked is what makes the
+                    // phone report the unlock, and shows "Trust this computer?" when needed.
+                    openSession(camera)
+                }
+            case .reading:
                 break
             }
             try await Task.sleep(for: .milliseconds(250))
@@ -289,8 +301,29 @@ final class DeviceBrowser: NSObject {
 
     private func failed(_ device: ICDevice, _ error: Error) {
         Self.log.error("device error: \(error.localizedDescription, privacy: .public)")
-        opening.remove(Self.identifier(device))
-        update(Self.identifier(device)) { $0.state = .failed(error.localizedDescription) }
+        let id = Self.identifier(device)
+        opening.remove(id)
+        // "Please unlock" (-9943) and any error while the phone is restricted mean "locked",
+        // not a failure: waitUntilReady keeps retrying until the phone is unlocked.
+        let lockedError = (error as NSError).domain == "com.apple.ImageCaptureCore" && (error as NSError).code == -9943
+        if lockedError || (device as? ICCameraDevice)?.isAccessRestrictedAppleDevice == true {
+            update(id) { $0.state = .locked }
+        } else {
+            update(id) { $0.state = .failed(error.localizedDescription) }
+        }
+    }
+
+    /// Closes the current session (didCloseSession reopens it) or opens a new one.
+    private func restartSession(_ device: ICDevice) {
+        let id = Self.identifier(device)
+        catalogs[id] = nil
+        update(id) { $0.state = .connecting }
+        if device.hasOpenSession {
+            device.requestCloseSession()
+        } else {
+            opening.remove(id)
+            openSession(device)
+        }
     }
 
     private func sessionClosed(_ device: ICDevice) {
@@ -301,8 +334,9 @@ final class DeviceBrowser: NSObject {
         opening.remove(id)
         let locked = (device as? ICCameraDevice)?.isAccessRestrictedAppleDevice ?? false
         update(id) { $0.state = locked ? .locked : .connecting }
-        // Reopen right away so the file list is fresh when it is needed.
-        if !locked { openSession(device) }
+        // Reopen right away so the file list is fresh when it is needed. Also when the phone looks
+        // locked: that flag can be stale here, and only an open session reports the unlock.
+        openSession(device)
     }
 
     private func renamed(_ device: ICDevice) {
@@ -421,14 +455,7 @@ extension DeviceBrowser: ICCameraDeviceDelegate {
             // Unlocked and trusted. Start a fresh session so the complete file list is read again;
             // file objects from before the lock may no longer work.
             Self.log.info("access restriction removed")
-            let id = Self.identifier(device)
-            self.catalogs[id] = nil
-            self.update(id) { $0.state = .connecting }
-            if device.hasOpenSession {
-                device.requestCloseSession() // didCloseSession reopens it
-            } else {
-                self.openSession(device)
-            }
+            self.restartSession(device)
         }
     }
 
