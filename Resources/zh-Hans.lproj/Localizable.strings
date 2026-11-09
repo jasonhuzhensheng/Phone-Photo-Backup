@@ -259,3 +259,11 @@
 "Free on drive" = "备份盘剩余";
 "Not enough space for about %@ of new files" = "空间不足，新文件约需 %@";
 "%@ files, %@, will be copied into:\n%@\n\nAbout %@ of them (%@) are already in other backups on this drive and will not be stored again.\n\nOriginal files will not be changed or deleted. Afterwards, photos and videos that are not in Photos yet will be imported." = "将处理 %1$@ 个文件（%2$@），备份到：\n%3$@\n\n其中约 %4$@ 个（%5$@）已在本盘的其他备份中，不会再存一份。\n\n原文件不会被修改或删除。之后会把“照片”里还没有的照片和视频导入。";
+
+/* Interface language */
+"Language" = "语言";
+"Follow System" = "跟随系统";
+"The new language is used after Phone Photo Backup restarts." = "重新打开“手机照片备份”后使用新的语言。";
+"Work in progress is not interrupted. The language changes the next time you open the app." = "不会打断正在进行的操作，下次打开应用时切换语言。";
+"The language changes the next time you open the app." = "下次打开应用时切换语言。";
+"Restart Now" = "立即重新打开";

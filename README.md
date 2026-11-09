@@ -1,6 +1,6 @@
 # Phone Photo Backup
 
-A native macOS app (Swift + SwiftUI) for backing up the photos and videos on a phone, read directly over USB or from a folder exported from it. Local-first: nothing is uploaded anywhere. The interface is available in English and Simplified Chinese (手机照片备份).
+A native macOS app (Swift + SwiftUI) for backing up the photos and videos on a phone, read directly over USB or from a folder exported from it. Local-first: nothing is uploaded anywhere. The interface is available in English and Simplified Chinese (手机照片备份). It follows the system language; to choose one, use **Phone Photo Backup › Language** (Follow System / English / 简体中文) and restart the app when asked.
 
 ## Current scope
 

@@ -27,6 +27,7 @@
 | `Sources/PhonePhotoBackup/PhonePhotoBackupApp.swift` | 应用入口、单窗口、菜单与快捷键 | — |
 | `Sources/BackupCore/AppUpdate.swift` | 版本号比较、解析 GitHub `releases/latest`、选出 `Phone-Photo-Backup-<版本>.zip` 及其 SHA-256（GitHub 的 `digest`，或发布说明里的 `SHA-256:` 行）；校验并解压下载（SHA-256、包标识、版本、`codesign --verify --strict --deep`）；生成替换脚本（等旧进程退出 → 旧包移开 → 新包移入，失败放回 → 重新打开 → 清理） | 不联网；只在临时目录和应用所在位置操作 |
 | `Sources/PhonePhotoBackup/Updater.swift` | 检查更新（启动时每天最多一次，可关闭；菜单“检查更新…”）、更新窗口、下载进度、调用核心校验、启动替换脚本后退出 | 只在用户点“安装并重启”且没有备份或导入进行时安装；自检模式和无 bundle 运行时不检查 |
+| `Sources/PhonePhotoBackup/AppLanguage.swift` | 应用菜单「语言」：跟随系统 / English / 简体中文，写入本应用的 `AppleLanguages`，提示重新打开 | 只改本应用设置；有备份或导入进行时不重新打开 |
 | `Sources/PhonePhotoBackup/SelfCheck.swift` | 开发自检：设置 `PPB_SNAPSHOT_DIR` 时自动运行流程并保存窗口截图 | 默认不启用 |
 | `Resources/`、`scripts/` | Info.plist、en/zh-Hans 本地化；打包 `.app`、生成图标 | — |
 | `Tests/BackupCoreTests/` | 用临时模拟字节测试复制、跳过、冲突、清单、重叠路径、符号链接、元数据、取消；用模拟设备测试设备来源的复制、免重读、冲突、下载不完整/失败、取消与继续、路径清理 | 不访问私人照片或真实设备 |
