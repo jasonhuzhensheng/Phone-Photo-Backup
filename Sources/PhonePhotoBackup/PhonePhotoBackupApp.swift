@@ -18,6 +18,8 @@ struct PhonePhotoBackupApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { updater.check(userInitiated: true) }
                 Toggle("Check for Updates Automatically", isOn: $updater.checksAutomatically)
+                Divider()
+                LanguageMenu(model: model)
             }
             CommandGroup(replacing: .newItem) {
                 Button("Choose Source Folder…") { model.chooseSource() }
